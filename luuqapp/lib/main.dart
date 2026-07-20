@@ -5196,7 +5196,8 @@ class _LotteryMachineState extends State<_LotteryMachine>
         personCount: widget.personCount,
         winnerIndex: _safeWinnerIndex,
         seed: _seedRandom.nextInt(0x7fffffff),
-        initialState: previous.personCount == widget.personCount &&
+        initialState:
+            previous.personCount == widget.personCount &&
                 previous.phase == WhoPaysLotteryPhase.seated
             ? previous.exportState()
             : null,

@@ -225,10 +225,7 @@ void main() {
 
           expect(simulation.phase, WhoPaysLotteryPhase.seated);
           expect(simulation.gateProgress, 0);
-          expect(
-            simulation.renderPositions[winnerIndex].dx,
-            closeTo(0, 0.001),
-          );
+          expect(simulation.renderPositions[winnerIndex].dx, closeTo(0, 0.001));
           expect(
             simulation.renderPositions[winnerIndex].dy,
             closeTo(209, 0.001),
@@ -319,15 +316,15 @@ void main() {
           // move a ball ~25 px in one frame — not a teleport. After the rotor
           // stops (settling onward: capture, funnel, drop), constraint
           // projection is the only jump source, so the tight bound applies.
-          final bound =
-              target < simulation.settlingEndSeconds ? 32.0 : 24.0;
+          final bound = target < simulation.settlingEndSeconds ? 32.0 : 24.0;
           for (var index = 0; index < simulation.personCount; index++) {
             final jump =
                 (simulation.renderPositions[index] - previous[index]).distance;
             expect(
               jump,
               lessThanOrEqualTo(bound),
-              reason: 'ball $index jumped ${jump.toStringAsFixed(1)} px '
+              reason:
+                  'ball $index jumped ${jump.toStringAsFixed(1)} px '
                   'at ${target.toStringAsFixed(2)} s',
             );
           }
@@ -423,8 +420,10 @@ void main() {
         seed: 9,
         initialState: state,
       );
-      expect(second.durationMilliseconds,
-          WhoPaysLotterySimulation.redrawDurationMilliseconds);
+      expect(
+        second.durationMilliseconds,
+        WhoPaysLotterySimulation.redrawDurationMilliseconds,
+      );
       expect(second.durationSeconds, closeTo(3.85, 1e-9));
       expect(second.renderPositions[3], const Offset(0, 209));
       for (var index = 0; index < 4; index++) {
@@ -490,15 +489,15 @@ void main() {
             // full-speed blade strike can legitimately move a ball ~25 px in
             // one frame — not a teleport. After the rotor stops, constraint
             // projection is the only jump source, so the tight bound applies.
-            final bound =
-                target < second.settlingEndSeconds ? 32.0 : 24.0;
+            final bound = target < second.settlingEndSeconds ? 32.0 : 24.0;
             for (var index = 0; index < personCount; index++) {
               final jump =
                   (second.renderPositions[index] - previous[index]).distance;
               expect(
                 jump,
                 lessThanOrEqualTo(bound),
-                reason: 'redraw ball $index jumped ${jump.toStringAsFixed(1)} '
+                reason:
+                    'redraw ball $index jumped ${jump.toStringAsFixed(1)} '
                     'px at ${target.toStringAsFixed(2)} s',
               );
             }

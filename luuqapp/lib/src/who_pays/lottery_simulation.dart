@@ -197,9 +197,8 @@ class WhoPaysLotterySimulation {
   int winnerGuideApplications = 0;
 
   double get durationSeconds => _phaseShift + _idleDuration;
-  int get durationMilliseconds => _phaseShift > 0
-      ? redrawDurationMilliseconds
-      : idleDurationMilliseconds;
+  int get durationMilliseconds =>
+      _phaseShift > 0 ? redrawDurationMilliseconds : idleDurationMilliseconds;
   double get spinUpEndSeconds => _phaseShift + _spinUpEnd;
   double get mixingEndSeconds => _phaseShift + _mixingEnd;
   double get settlingEndSeconds => _phaseShift + _settlingEnd;
@@ -297,8 +296,7 @@ class WhoPaysLotterySimulation {
       chamberPositions: List<Offset>.unmodifiable(
         balls.map((ball) => ball.position),
       ),
-      seatedBallIndex:
-          phase == WhoPaysLotteryPhase.seated ? winnerIndex : null,
+      seatedBallIndex: phase == WhoPaysLotteryPhase.seated ? winnerIndex : null,
     );
   }
 
@@ -394,9 +392,7 @@ class WhoPaysLotterySimulation {
       balls.add(WhoPaysBallState(position: position));
     }
 
-    _reducedMotionStartPositions.addAll(
-      balls.map((ball) => ball.position),
-    );
+    _reducedMotionStartPositions.addAll(balls.map((ball) => ball.position));
   }
 
   bool _isSafeInitialPosition(Offset candidate, double minimumDistance) {
@@ -422,7 +418,8 @@ class WhoPaysLotterySimulation {
       final isWinner = index == winnerIndex;
       final winnerInTube =
           isWinner && capturing && ball.position.dy >= tubeEntryY;
-      final intakeActive = _phaseShift > 0 &&
+      final intakeActive =
+          _phaseShift > 0 &&
           stepTime < _phaseShift &&
           index == _intakeBallIndex &&
           !_intakeReleased;
@@ -449,8 +446,10 @@ class WhoPaysLotterySimulation {
         if (isWinner && capturing) {
           dragRate = winnerCaptureDragRate;
           final ramp =
-              ((drawTime - _settlingEnd) / (_captureEnd - _settlingEnd))
-                  .clamp(0.0, 1.0);
+              ((drawTime - _settlingEnd) / (_captureEnd - _settlingEnd)).clamp(
+                0.0,
+                1.0,
+              );
           final limit = drawTime >= _captureEnd - _guaranteeWindow
               ? suctionGuaranteeMax
               : suctionRampMax * ramp;
@@ -487,18 +486,12 @@ class WhoPaysLotterySimulation {
 
     var maxImpactSpeed = 0.0;
     for (var pass = 0; pass < collisionPasses; pass++) {
-      maxImpactSpeed = max(
-        maxImpactSpeed,
-        _resolveBallCollisions(drawTime),
-      );
+      maxImpactSpeed = max(maxImpactSpeed, _resolveBallCollisions(drawTime));
       maxImpactSpeed = max(
         maxImpactSpeed,
         _resolveRotorCollisions(stepRotorAngle, stepRotorSpeed, drawTime),
       );
-      maxImpactSpeed = max(
-        maxImpactSpeed,
-        _resolveBoundaries(drawTime),
-      );
+      maxImpactSpeed = max(maxImpactSpeed, _resolveBoundaries(drawTime));
     }
 
     for (final ball in balls) {
@@ -564,7 +557,8 @@ class WhoPaysLotterySimulation {
       }
 
       final ball = balls[ballIndex];
-      final skipAsIntakeBall = ballIndex == _intakeBallIndex &&
+      final skipAsIntakeBall =
+          ballIndex == _intakeBallIndex &&
           !_intakeReleased &&
           _phaseShift > 0 &&
           ball.position.dy >= tubeEntryY;
@@ -661,10 +655,12 @@ class WhoPaysLotterySimulation {
 
     for (var index = 0; index < balls.length; index++) {
       final ball = balls[index];
-      final winnerInTube = index == winnerIndex &&
+      final winnerInTube =
+          index == winnerIndex &&
           drawTime >= _settlingEnd &&
           ball.position.dy >= tubeEntryY;
-      final intakeInTube = index == _intakeBallIndex &&
+      final intakeInTube =
+          index == _intakeBallIndex &&
           !_intakeReleased &&
           _phaseShift > 0 &&
           ball.position.dy >= tubeEntryY;
@@ -706,11 +702,7 @@ class WhoPaysLotterySimulation {
     return maxImpactSpeed;
   }
 
-  bool _overlapsRotor(
-    Offset position,
-    double angle, {
-    double clearance = 0,
-  }) {
+  bool _overlapsRotor(Offset position, double angle, {double clearance = 0}) {
     if (position.distance < ballRadius + rotorHubRadius + clearance) {
       return true;
     }
@@ -838,16 +830,14 @@ class WhoPaysLotterySimulation {
     if (t < _gateCloseStart) return 1;
     if (t < _gateCloseEnd) {
       return 1 -
-          _smoothStep((t - _gateCloseStart) / (_gateCloseEnd - _gateCloseStart));
+          _smoothStep(
+            (t - _gateCloseStart) / (_gateCloseEnd - _gateCloseStart),
+          );
     }
     return 0;
   }
 
-  static Offset _closestPointOnSegment(
-    Offset point,
-    Offset start,
-    Offset end,
-  ) {
+  static Offset _closestPointOnSegment(Offset point, Offset start, Offset end) {
     final segment = end - start;
     final lengthSquared = _dot(segment, segment);
     if (lengthSquared <= 1e-9) return start;

@@ -115,9 +115,9 @@ void main() {
       Duration(
         milliseconds:
             WhoPaysLotterySimulation.redrawDurationMilliseconds +
-                200 -
-                WhoPaysLotterySimulation.idleDurationMilliseconds -
-                probeOffsetMs,
+            200 -
+            WhoPaysLotterySimulation.idleDurationMilliseconds -
+            probeOffsetMs,
       ),
     );
     await tester.pump();
