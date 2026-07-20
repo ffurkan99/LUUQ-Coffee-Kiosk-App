@@ -89,10 +89,35 @@ void main() {
     await tester.pump();
     expect(find.text('KARILIYOR...'), findsOneWidget);
 
+    // Süreklilik kanıtı: yeniden çekiliş intake nedeniyle 3850 ms sürer —
+    // idle süre + pay geçtikten sonra sonuç HENÜZ görünmemeli.
+    //
+    // Not: kontrol noktası idle süreden (3400 ms) sadece 200 ms sonraya
+    // konursa kanıt yanlış pozitif verir: sonuç paneli ile "KARILIYOR..."
+    // düğmesi arasında 300 ms'lik bir AnimatedSwitcher geçişi var, bu
+    // yüzden bozuk/eski (initialState geçirilmemiş) 3400 ms'lik bir
+    // simülasyon bile 3400+200=3600 ms'de "KARILIYOR..." widget'ını hâlâ
+    // (geçiş animasyonunun kalıntısı olarak) ağaçta bırakır. Kontrol
+    // noktasını, 300 ms'lik geçişi geride bırakacak ama gerçek 3850 ms'lik
+    // yeniden çekilişin bitişinden (idle + 450 ms) önce kalacak şekilde
+    // idle + 375 ms'ye taşıyoruz.
+    const probeOffsetMs = 375;
+    await tester.pump(
+      const Duration(
+        milliseconds:
+            WhoPaysLotterySimulation.idleDurationMilliseconds + probeOffsetMs,
+      ),
+    );
+    expect(find.text('KARILIYOR...'), findsOneWidget);
+    expect(find.text('Tekrar Çek'), findsNothing);
+
     await tester.pump(
       Duration(
         milliseconds:
-            WhoPaysLotterySimulation.redrawDurationMilliseconds + 200,
+            WhoPaysLotterySimulation.redrawDurationMilliseconds +
+                200 -
+                WhoPaysLotterySimulation.idleDurationMilliseconds -
+                probeOffsetMs,
       ),
     );
     await tester.pump();
