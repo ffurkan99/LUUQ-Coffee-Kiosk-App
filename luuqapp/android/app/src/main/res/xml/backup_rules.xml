@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+      flutter_secure_storage 9.2.4 stores Android values in this credential-
+      protected SharedPreferences file. Its ciphertext must never be restored
+      without the device-bound Android Keystore key.
+    -->
+    <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+</full-backup-content>

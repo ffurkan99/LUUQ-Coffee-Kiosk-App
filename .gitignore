@@ -1,0 +1,10 @@
+# IDE ve araç önbellekleri
+.idea/
+.vs/
+.serena/
+
+# Derleme çıktıları
+luuqapp/android/build/
+
+# Günlükler
+*.log

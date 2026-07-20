@@ -1,0 +1,191 @@
+Parsed 190 items from _menuCategories:
+Name: Americano | Price: 185₺ / 205₺ | Image: assets/menu/americano.jpg
+Name: Cappuccino | Price: 210₺ / 230₺ | Image: assets/menu/cappucino.jpg
+Name: Caramel Latte | Price: 250₺ / 270₺ | Image: assets/menu/caramellatte.jpg
+Name: Caramel Macchiato | Price: 250₺ / 270₺ | Image: assets/menu/caramelmacchiato.jpg
+Name: Cortado S | Price: 200₺ | Image: assets/menu/cortado.jpg
+Name: Espresso Double | Price: 145₺ | Image: assets/menu/espressodouble.jpg
+Name: Espresso Single | Price: 125₺ | Image: assets/menu/espressodouble.jpg
+Name: Flat White | Price: 250₺ | Image: assets/menu/flatwhite.jpg
+Name: Ice Oreo Latte | Price: 235₺ | Image: None
+Name: Latte | Price: 200₺ / 220₺ | Image: assets/menu/latte.jpg
+Name: Mocha | Price: 240₺ / 260₺ | Image: assets/menu/mocha.jpg
+Name: Oreo Latte | Price: 240₺ / 260₺ | Image: None
+Name: White Mocha | Price: 240₺ / 260₺ | Image: assets/menu/whitemocha.jpg
+Name: Cold Brew | Price: 220₺ | Image: None
+Name: Colombia | Price: 210₺ / 230₺ | Image: assets/menu/klasikfiltre.jpg
+Name: Etiyopya | Price: 210₺ / 230₺ | Image: assets/menu/klasikfiltre.jpg
+Name: Filtre Sütlü | Price: 190₺ / 210₺ | Image: None
+Name: Guatamala | Price: 210₺ / 230₺ | Image: assets/menu/klasikfiltre.jpg
+Name: Klasik Filtre | Price: 170₺ / 190₺ | Image: assets/menu/klasikfiltre.jpg
+Name: Chai Tea Latte | Price: 265₺ | Image: None
+Name: Çay | Price: 90₺ | Image: assets/menu/cay.jpeg
+Name: Damla Sakızlı Sahlep | Price: 245₺ | Image: None
+Name: Dondurma Sahlep | Price: 255₺ | Image: None
+Name: Double Türk Kahvesi | Price: 160₺ | Image: assets/menu/turkkahvesi.jpg
+Name: Frambuazlı Sıcak Beyaz Çikolata | Price: 245₺ | Image: assets/menu/frambuazsicakbeyazcikolata.jpg
+Name: Sıcak Çikolata | Price: 235₺ / 255₺ | Image: None
+Name: Tarçınlı Sahlep | Price: 235₺ | Image: None
+Name: Türk Kahvesi | Price: 140₺ | Image: assets/menu/turkkahvesi.jpg
+Name: Mocha Mint | Price: 250₺ | Image: None
+Name: Nuttymix | Price: 250₺ | Image: assets/menu/png/latte.png
+Name: Raspberry Mocha | Price: 250₺ | Image: None
+Name: Vani Gold | Price: 240₺ | Image: None
+Name: Vanicha | Price: 240₺ | Image: None
+Name: Vitte Latte | Price: 240₺ | Image: None
+Name: Vitte Milk | Price: 240₺ | Image: None
+Name: Affogato | Price: 240₺ | Image: None
+Name: Ice Americano | Price: 185₺ | Image: assets/menu/iceamericano.jpg
+Name: Ice Caramel Latte | Price: 250₺ | Image: assets/menu/icecaramellatte.jpg
+Name: Ice Caramel Macchiato | Price: 250₺ | Image: assets/menu/icecaramelmacchiato.jpg
+Name: Ice Filtre Kahve | Price: 170₺ | Image: None
+Name: Ice Flat White | Price: 250₺ | Image: assets/menu/iceflatwhite.jpg
+Name: Ice Latte | Price: 200₺ | Image: assets/menu/icelatte.jpg
+Name: Ice Mocha | Price: 240₺ | Image: assets/menu/icemocha.jpg
+Name: Ice Sütlü Filtre Kahve | Price: 190₺ | Image: assets/menu/icesutlufiltrekahve.jpg
+Name: Ice White Mocha | Price: 240₺ | Image: assets/menu/icewhitemocha.jpg
+Name: Beach of Luuq | Price: 260₺ | Image: None
+Name: Butterfly Effect | Price: 270₺ | Image: assets/menu/png/buttferflyeffect.png
+Name: Caramel Affogato | Price: 280₺ | Image: assets/menu/png/caramelaffogato.png
+Name: Casablanca | Price: 260₺ | Image: None
+Name: Cool Lime | Price: 260₺ | Image: assets/menu/png/coollime.png
+Name: Ginger Dragon | Price: 270₺ | Image: None
+Name: Guava Bomb | Price: 270₺ | Image: None
+Name: Ice Matcha Latte | Price: 240₺ | Image: None
+Name: Ice Pistachio Dream | Price: 270₺ | Image: assets/menu/png/pistachiodream.png
+Name: Luuq Kuzu Kulağı Kokteyl | Price: 270₺ | Image: assets/menu/png/kuzukulagi.png
+Name: Matcha Mix | Price: 270₺ | Image: assets/menu/png/matchamix.png
+Name: Mazagran | Price: 250₺ | Image: None
+Name: Rubiqa Mocha | Price: 270₺ | Image: None
+Name: Savaya | Price: 270₺ | Image: None
+Name: Strawberry Cool Lime | Price: 260₺ | Image: assets/menu/png/strawberrycoollime.png
+Name: Sweet & Sour Mix | Price: 260₺ | Image: None
+Name: Turkish Dream | Price: 240₺ | Image: None
+Name: Waffle Juice | Price: 260₺ | Image: None
+Name: Ahududu Limon | Price: 220₺ | Image: None
+Name: Green Carnaval | Price: 220₺ | Image: None
+Name: Gripsavar | Price: 220₺ | Image: None
+Name: Limon Zencefil | Price: 220₺ | Image: None
+Name: Madagascar | Price: 220₺ | Image: None
+Name: Magic Of Bali | Price: 220₺ | Image: None
+Name: Relax | Price: 220₺ | Image: None
+Name: Frozen Ananas & Portakal & Limon | Price: 265₺ | Image: assets/menu/frozenananasportakallimon.jpg
+Name: Frozen Karpuz & Çilek | Price: 265₺ | Image: assets/menu/frozenkarpuzcilek.jpg
+Name: Frozen Mango | Price: 265₺ | Image: assets/menu/frozenmango.jpg
+Name: Frozen Orman Meyveleri | Price: 265₺ | Image: assets/menu/frozenormanmeyveleri.jpg
+Name: Frozen Yuzu & Şeftali | Price: 265₺ | Image: assets/menu/frozenyuzuseftali.jpg
+Name: Çilekli Limonata | Price: 230₺ | Image: None
+Name: Fresh Bubble Tea | Price: 250₺ | Image: assets/menu/freshbubble.jpg
+Name: Jungle Bubble Tea | Price: 250₺ | Image: assets/menu/junglebubletea.jpg
+Name: Mango Bubble Tea | Price: 250₺ | Image: assets/menu/mangobubbletea.jpg
+Name: Naneli Limonata | Price: 210₺ | Image: None
+Name: Strawberry Bubble Tea | Price: 250₺ | Image: assets/menu/strawberrybubbletea.jpg
+Name: Milkshake Beyaz Çikolata & Fındık | Price: 265₺ | Image: assets/menu/beyazcikolatafindik.jpg
+Name: Milkshake Bitter & Portakal | Price: 265₺ | Image: assets/menu/bitterportakal.jpg
+Name: Milkshake Cinderella | Price: 265₺ | Image: assets/menu/cindirella.jpg
+Name: Milkshake Morocco | Price: 265₺ | Image: assets/menu/morocco.jpg
+Name: Milkshake Nutella | Price: 265₺ | Image: assets/menu/nutellamilshake.jpg
+Name: Milkshake Tahin & Karamel & Çilek | Price: 265₺ | Image: assets/menu/toffenutkaramelcilek.jpg
+Name: Beyoğlu Klasik | Price: 125₺ | Image: None
+Name: Beyoğlu Reyhan | Price: 125₺ | Image: None
+Name: Beyoğlu Zencefil | Price: 125₺ | Image: None
+Name: Redbull | Price: 170₺ | Image: None
+Name: Damla Soda (200 ml) | Price: 90₺ | Image: None
+Name: Damla Soda (330 ml) | Price: 100₺ | Image: None
+Name: Damla Cam Su (330 ml) | Price: 60₺ | Image: None
+Name: Uludağ Premium Soda | Price: 100₺ | Image: None
+Name: Allgo Dom Pasta | Price: 295₺ | Image: None
+Name: Ananas Badem Mono Pasta | Price: 295₺ | Image: None
+Name: Antep Dolgulu Cheesecake | Price: 295₺ | Image: None
+Name: Antep Fıstıklı Tart | Price: 305₺ | Image: None
+Name: Bademli Kruvasan | Price: 295₺ | Image: None
+Name: Blondie Limon | Price: 305₺ | Image: None
+Name: Cheesecake Patlayan Şeker | Price: 285₺ | Image: None
+Name: Cheesecake San Sebastian | Price: 295₺ | Image: None
+Name: Çikolatalı Cookie Pie | Price: 400₺ | Image: None
+Name: Çikolatalı Tırtıl Pasta | Price: 285₺ | Image: None
+Name: Elmalı Tart | Price: 295₺ | Image: None
+Name: Fındıklı Kruvasan | Price: 295₺ | Image: None
+Name: Frambuaz & Antep Fıstıklı Kek | Price: 295₺ | Image: None
+Name: Frambuazlı Mono Pasta | Price: 295₺ | Image: None
+Name: Kesme Fındıklı Pasta | Price: 435₺ | Image: None
+Name: Lime Ekler | Price: 295₺ | Image: None
+Name: Limon & Frangipane Tart | Price: 305₺ | Image: None
+Name: Limon & Haşhaşlı Baton Kek | Price: 155₺ | Image: None
+Name: Lotus Mono Ekler | Price: 295₺ | Image: None
+Name: Luuq Çikolatalı Mousse Pasta | Price: 285₺ | Image: None
+Name: Mermer Baton Kek | Price: 155₺ | Image: None
+Name: Oreo Cheesecake | Price: 305₺ | Image: None
+Name: Orman Meyveli Cup | Price: 285₺ | Image: None
+Name: Orman Meyveli Elips Tart | Price: 285₺ | Image: None
+Name: Paris Breast | Price: 295₺ | Image: None
+Name: Passion & Çikolatalı Tart | Price: 295₺ | Image: None
+Name: Smores Cup | Price: 285₺ | Image: None
+Name: Tiramisu | Price: 285₺ | Image: None
+Name: Trio Chocolate Browni | Price: 265₺ | Image: None
+Name: Üçgen Dilim Fıstıklı Cheesecake | Price: 435₺ | Image: None
+Name: Vişneli Tart | Price: 305₺ | Image: None
+Name: Vişneli Brownie | Price: 275₺ | Image: None
+Name: White Cascada Dom Pasta | Price: 285₺ | Image: None
+Name: Yanık Cheesecake | Price: 305₺ | Image: None
+Name: Luuq Chocolate Delight | Price: 410₺ | Image: assets/menu/luuqchocolatedelight.jpg
+Name: Luuq Chocolate Joy | Price: 410₺ | Image: assets/menu/luuqchocolatejoy.jpg
+Name: Luuq Cream Puff | Price: 445₺ | Image: assets/menu/luuqcreampuff.jpg
+Name: Luuq Crispy Dream | Price: 445₺ | Image: assets/menu/luuqcrispydream.jpg
+Name: Luuq Dubai Chocolate Cup | Price: 445₺ | Image: assets/menu/luuqdubaichocolatecup.jpg
+Name: Luuq White Chocolate Delight | Price: 410₺ | Image: assets/menu/luuqwhitechocolatedelight.jpg
+Name: Dana Jambon | Price: 275₺ | Image: None
+Name: Haşhaşlı Cabata Sandviç | Price: 275₺ | Image: None
+Name: Ezine Peynirli Tahıllı Cabata Sandviç | Price: 275₺ | Image: None
+Name: Haşhaşlı 4 Peynirli Bagel Sandviç | Price: 265₺ | Image: None
+Name: Haşhaşlı Cabata Hindi Füme Tahıllı | Price: 275₺ | Image: None
+Name: Cabata Sandviç | Price: 275₺ | Image: None
+Name: Pesto Soslu Tavuklu Sandviç | Price: 295₺ | Image: None
+Name: Tahıllı Üçgen Panini | Price: 285₺ | Image: None
+Name: Yedi Foccacia Ezine Peynirli Sandviç | Price: 295₺ | Image: None
+Name: Yedi Foccacia Hindi Sandviç | Price: 295₺ | Image: None
+Name: Yedi Roast Beef Sandviç | Price: 285₺ | Image: None
+Name: Yulaflı Cabata | Price: 250₺ | Image: None
+Name: Seramik Demlik | Price: 1750₺ | Image: None
+Name: Seramik Double Türk Kahvesi Seti | Price: 1200₺ | Image: None
+Name: Seramik Kupa - Altlık | Price: 1200₺ | Image: None
+Name: Seramik Pasta Tabağı | Price: 1200₺ | Image: None
+Name: Seramik Türk Kahvesi Seti | Price: 1200₺ | Image: None
+Name: Trm04s Rose 400 ml Termos | Price: 995₺ | Image: None
+Name: Trm094 Beyaz Ofset 350 ml Çelik Termos | Price: 720₺ | Image: None
+Name: Trm094 K.rengi Ofset 350 ml Çelik Termos | Price: 720₺ | Image: None
+Name: Trm119 Siyah 500 ml Çelik Mug Termos | Price: 995₺ | Image: None
+Name: Trm159 Haki 350 ml Çelik Termos | Price: 995₺ | Image: None
+Name: Trm159 Krem 350 ml Çelik Termos | Price: 995₺ | Image: None
+Name: Trm175 Siyah 500 ml Çelik Termos | Price: 995₺ | Image: None
+Name: Trm173 Yeşil 350 ml Çelik Termos | Price: 995₺ | Image: None
+Name: Trm185-B 380 ml Beyaz Termos | Price: 995₺ | Image: None
+Name: Trm185-G 380 ml Gri Termos | Price: 995₺ | Image: None
+Name: Bademli Süt | Price: 50₺ | Image: None
+Name: Bubble | Price: 50₺ | Image: None
+Name: Balparmak (7 gr) | Price: 100₺ | Image: None
+Name: Calebaut | Price: 80₺ | Image: None
+Name: Dondurma | Price: 75₺ | Image: None
+Name: Ekstra Çilek (Meyve) | Price: 80₺ | Image: None
+Name: Ekstra Muz (Meyve) | Price: 60₺ | Image: None
+Name: Laktozsuz Süt | Price: 50₺ | Image: None
+Name: Fındık Süt | Price: 50₺ | Image: None
+Name: Krema | Price: 30₺ | Image: None
+Name: Püre | Price: 30₺ | Image: None
+Name: Shot | Price: 50₺ | Image: None
+Name: Sos | Price: 50₺ | Image: None
+Name: Şurup | Price: 30₺ | Image: None
+Name: Yulaf Süt | Price: 50₺ | Image: None
+Name: Vanilya | Price: 100₺ | Image: None
+Name: Kakao | Price: 100₺ | Image: None
+Name: Karamel | Price: 100₺ | Image: None
+Name: Antep Fıstığı | Price: 100₺ | Image: None
+Name: Limon | Price: 100₺ | Image: None
+Name: Kavun | Price: 100₺ | Image: None
+Name: Çilek | Price: 100₺ | Image: None
+Name: Karadut | Price: 100₺ | Image: None
+Name: Bal Badem | Price: 100₺ | Image: None
+Name: Bubble Gum | Price: 100₺ | Image: None
+Name: Blue Sky | Price: 100₺ | Image: None
+Name: Meyve Şöleni | Price: 100₺ | Image: None
+Name: Oreo | Price: 100₺ | Image: None

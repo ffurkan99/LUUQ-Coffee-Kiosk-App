@@ -1,0 +1,93 @@
+Matching results:
+
+File: antepcheesecake.jpeg (Keywords: ['antepcheesecake', 'antep'])
+  Match: Name: Antep Dolgulu Cheesecake | Price: 295₺ | Image: None
+  Match: Name: Antep Fıstıklı Tart | Price: 305₺ | Image: None
+  Match: Name: Frambuaz & Antep Fıstıklı Kek | Price: 295₺ | Image: None
+  Match: Name: Antep Fıstığı | Price: 100₺ | Image: None
+
+File: bitkicayi.jpeg (Keywords: ['bitkicayi', 'çay'])
+  Match: Name: Çay | Price: 90₺ | Image: assets/menu/cay.jpeg
+
+File: brownie.jpeg (Keywords: ['brownie'])
+  Match: Name: Vişneli Brownie | Price: 275₺ | Image: None
+
+File: browniedream.jpeg (Keywords: ['browniedream'])
+  NO MATCH FOUND
+
+File: buttferflyeffect.jpg (Keywords: ['buttferflyeffect'])
+  Match: Name: Butterfly Effect | Price: 270₺ | Image: assets/menu/png/buttferflyeffect.png
+
+File: caramelaffogato.jpg (Keywords: ['caramelaffogato'])
+  Match: Name: Caramel Affogato | Price: 280₺ | Image: assets/menu/png/caramelaffogato.png
+
+File: cileklimonopasta.jpeg (Keywords: ['cileklimonopasta', 'çilek', 'limon'])
+  Match: Name: Ahududu Limon | Price: 220₺ | Image: None
+  Match: Name: Limon Zencefil | Price: 220₺ | Image: None
+  Match: Name: Frozen Ananas & Portakal & Limon | Price: 265₺ | Image: assets/menu/frozenananasportakallimon.jpg
+  Match: Name: Frozen Karpuz & Çilek | Price: 265₺ | Image: assets/menu/frozenkarpuzcilek.jpg
+  Match: Name: Çilekli Limonata | Price: 230₺ | Image: None
+  Match: Name: Naneli Limonata | Price: 210₺ | Image: None
+  Match: Name: Milkshake Tahin & Karamel & Çilek | Price: 265₺ | Image: assets/menu/toffenutkaramelcilek.jpg
+  Match: Name: Blondie Limon | Price: 305₺ | Image: None
+  Match: Name: Limon & Frangipane Tart | Price: 305₺ | Image: None
+  Match: Name: Limon & Haşhaşlı Baton Kek | Price: 155₺ | Image: None
+  Match: Name: Ekstra Çilek (Meyve) | Price: 80₺ | Image: None
+  Match: Name: Limon | Price: 100₺ | Image: None
+  Match: Name: Çilek | Price: 100₺ | Image: None
+
+File: coollime.jpg (Keywords: ['coollime'])
+  Match: Name: Cool Lime | Price: 260₺ | Image: assets/menu/png/coollime.png
+  Match: Name: Strawberry Cool Lime | Price: 260₺ | Image: assets/menu/png/strawberrycoollime.png
+
+File: kuzukulagi.jpg (Keywords: ['kuzukulagi', 'kuzukulağı'])
+  Match: Name: Luuq Kuzu Kulağı Kokteyl | Price: 270₺ | Image: assets/menu/png/kuzukulagi.png
+
+File: limonlupasta.jpeg (Keywords: ['limonlupasta', 'limon'])
+  Match: Name: Ahududu Limon | Price: 220₺ | Image: None
+  Match: Name: Limon Zencefil | Price: 220₺ | Image: None
+  Match: Name: Frozen Ananas & Portakal & Limon | Price: 265₺ | Image: assets/menu/frozenananasportakallimon.jpg
+  Match: Name: Çilekli Limonata | Price: 230₺ | Image: None
+  Match: Name: Naneli Limonata | Price: 210₺ | Image: None
+  Match: Name: Blondie Limon | Price: 305₺ | Image: None
+  Match: Name: Limon & Frangipane Tart | Price: 305₺ | Image: None
+  Match: Name: Limon & Haşhaşlı Baton Kek | Price: 155₺ | Image: None
+  Match: Name: Limon | Price: 100₺ | Image: None
+
+File: matchamix.jpg (Keywords: ['matchamix'])
+  Match: Name: Matcha Mix | Price: 270₺ | Image: assets/menu/png/matchamix.png
+
+File: oreolatteice.jpeg (Keywords: ['oreolatteice'])
+  NO MATCH FOUND
+
+File: oreolattesicak.jpeg (Keywords: ['oreolattesicak', 'sıcak'])
+  Match: Name: Frambuazlı Sıcak Beyaz Çikolata | Price: 245₺ | Image: assets/menu/frambuazsicakbeyazcikolata.jpg
+  Match: Name: Sıcak Çikolata | Price: 235₺ / 255₺ | Image: None
+
+File: pistachiodream.jpg (Keywords: ['pistachiodream'])
+  Match: Name: Ice Pistachio Dream | Price: 270₺ | Image: assets/menu/png/pistachiodream.png
+
+File: rubycamocha.jpeg (Keywords: ['rubycamocha'])
+  NO MATCH FOUND
+
+File: sansebastian.jpeg (Keywords: ['sansebastian'])
+  NO MATCH FOUND
+
+File: sicakcikolata.jpeg (Keywords: ['sicakcikolata', 'sıcak', 'çikolata'])
+  Match: Name: Frambuazlı Sıcak Beyaz Çikolata | Price: 245₺ | Image: assets/menu/frambuazsicakbeyazcikolata.jpg
+  Match: Name: Sıcak Çikolata | Price: 235₺ / 255₺ | Image: None
+  Match: Name: Milkshake Beyaz Çikolata & Fındık | Price: 265₺ | Image: assets/menu/beyazcikolatafindik.jpg
+  Match: Name: Çikolatalı Cookie Pie | Price: 400₺ | Image: None
+  Match: Name: Çikolatalı Tırtıl Pasta | Price: 285₺ | Image: None
+  Match: Name: Luuq Çikolatalı Mousse Pasta | Price: 285₺ | Image: None
+  Match: Name: Passion & Çikolatalı Tart | Price: 295₺ | Image: None
+
+File: strawberrycoollime.jpg (Keywords: ['strawberrycoollime'])
+  Match: Name: Strawberry Cool Lime | Price: 260₺ | Image: assets/menu/png/strawberrycoollime.png
+
+File: visnelibrownie.jpeg (Keywords: ['visnelibrownie', 'vişne'])
+  Match: Name: Vişneli Tart | Price: 305₺ | Image: None
+  Match: Name: Vişneli Brownie | Price: 275₺ | Image: None
+
+File: whitecascada.jpeg (Keywords: ['whitecascada'])
+  NO MATCH FOUND
