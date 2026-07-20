@@ -47,6 +47,24 @@ class ApkDownloadCancellationToken {
   }
 }
 
+/// Coarse cause buckets for a failed APK download, used to show the admin an
+/// actionable message instead of a single generic one and to tag the remote
+/// analytics event so failures can be diagnosed without device access.
+enum ApkDownloadFailureKind { storage, network, badUrlOrResponse, unknown }
+
+ApkDownloadFailureKind classifyApkDownloadFailure(Object error) {
+  // FileSystemException also implements IOException; check it before the
+  // network family so storage problems keep their specific bucket.
+  if (error is FileSystemException) return ApkDownloadFailureKind.storage;
+  if (error is SocketException || error is HandshakeException) {
+    return ApkDownloadFailureKind.network;
+  }
+  if (error is HttpException || error is FormatException) {
+    return ApkDownloadFailureKind.badUrlOrResponse;
+  }
+  return ApkDownloadFailureKind.unknown;
+}
+
 class ApkDownloadPolicy {
   static const int maximumApkBytes = 200 * 1024 * 1024;
   static const Duration headerTimeout = Duration(seconds: 15);
