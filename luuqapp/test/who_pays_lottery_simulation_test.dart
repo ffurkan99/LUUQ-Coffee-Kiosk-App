@@ -404,6 +404,161 @@ void main() {
         );
       }
     });
+
+    test('exportState captures seated results for the next draw', () {
+      final first = WhoPaysLotterySimulation(
+        personCount: 4,
+        winnerIndex: 3,
+        seed: 2024,
+      );
+      _advanceInFrames(first, first.durationSeconds);
+
+      final state = first.exportState();
+      expect(state.seatedBallIndex, 3);
+      expect(state.chamberPositions.length, 4);
+
+      final second = WhoPaysLotterySimulation(
+        personCount: 4,
+        winnerIndex: 1,
+        seed: 9,
+        initialState: state,
+      );
+      expect(second.durationMilliseconds,
+          WhoPaysLotterySimulation.redrawDurationMilliseconds);
+      expect(second.durationSeconds, closeTo(3.85, 1e-9));
+      expect(second.renderPositions[3], const Offset(0, 209));
+      for (var index = 0; index < 4; index++) {
+        if (index == 3) continue;
+        expect(second.renderPositions[index], state.chamberPositions[index]);
+      }
+    });
+
+    test('the intake ball is pulled back into the chamber', () {
+      final first = WhoPaysLotterySimulation(
+        personCount: 6,
+        winnerIndex: 0,
+        seed: 31337,
+      );
+      _advanceInFrames(first, first.durationSeconds);
+
+      final second = WhoPaysLotterySimulation(
+        personCount: 6,
+        winnerIndex: 4,
+        seed: 555,
+        initialState: first.exportState(),
+      );
+
+      _advanceInFrames(second, 0.10);
+      expect(second.phase, WhoPaysLotteryPhase.intake);
+      expect(second.gateProgress, greaterThan(0.5));
+
+      _advanceInFrames(second, 0.40);
+      expect(
+        second.renderPositions[0].dy,
+        lessThan(WhoPaysLotterySimulation.tubeEntryY),
+        reason: 'intake ball should be back in the chamber',
+      );
+
+      _advanceInFrames(second, WhoPaysLotterySimulation.intakeDurationSeconds);
+      expect(second.gateProgress, 0);
+    });
+
+    for (var personCount = 2; personCount <= 6; personCount++) {
+      for (final seed in const <int>[11, 7302]) {
+        test('redraw $personCount/$seed seats the new winner cleanly', () {
+          final first = WhoPaysLotterySimulation(
+            personCount: personCount,
+            winnerIndex: seed % personCount,
+            seed: seed,
+          );
+          _advanceInFrames(first, first.durationSeconds);
+
+          final winnerIndex = (seed + 1) % personCount;
+          final second = WhoPaysLotterySimulation(
+            personCount: personCount,
+            winnerIndex: winnerIndex,
+            seed: seed * 31,
+            initialState: first.exportState(),
+          );
+
+          var previous = List<Offset>.from(second.renderPositions);
+          var target = 0.0;
+          while (target < second.durationSeconds) {
+            target = math.min(target + 1 / 60, second.durationSeconds);
+            second.advanceTo(target);
+            // Rotor-active phases (intake + spin-up/mixing/settling): a
+            // full-speed blade strike can legitimately move a ball ~25 px in
+            // one frame — not a teleport. After the rotor stops, constraint
+            // projection is the only jump source, so the tight bound applies.
+            final bound =
+                target < second.settlingEndSeconds ? 32.0 : 24.0;
+            for (var index = 0; index < personCount; index++) {
+              final jump =
+                  (second.renderPositions[index] - previous[index]).distance;
+              expect(
+                jump,
+                lessThanOrEqualTo(bound),
+                reason: 'redraw ball $index jumped ${jump.toStringAsFixed(1)} '
+                    'px at ${target.toStringAsFixed(2)} s',
+              );
+            }
+            previous = List<Offset>.from(second.renderPositions);
+          }
+
+          expect(second.phase, WhoPaysLotteryPhase.seated);
+          expect(second.gateProgress, 0);
+          expect(second.renderPositions[winnerIndex], const Offset(0, 209));
+        });
+      }
+    }
+
+    test('winner neutrality also holds during a redraw intake', () {
+      final first = WhoPaysLotterySimulation(
+        personCount: 5,
+        winnerIndex: 2,
+        seed: 640,
+      );
+      _advanceInFrames(first, first.durationSeconds);
+
+      final second = WhoPaysLotterySimulation(
+        personCount: 5,
+        winnerIndex: 2, // aynı top üst üste kazanabilir
+        seed: 641,
+        initialState: first.exportState(),
+      );
+      _advanceInFrames(second, second.settlingEndSeconds - 0.001);
+      expect(second.winnerGuideApplications, 0);
+      _advanceInFrames(second, second.durationSeconds);
+      expect(second.renderPositions[2], const Offset(0, 209));
+    });
+
+    test('reduced motion honours the initial state', () {
+      final first = WhoPaysLotterySimulation(
+        personCount: 4,
+        winnerIndex: 0,
+        seed: 12321,
+      );
+      _advanceInFrames(first, first.durationSeconds);
+
+      final second = WhoPaysLotterySimulation(
+        personCount: 4,
+        winnerIndex: 2,
+        seed: 5,
+        initialState: first.exportState(),
+      );
+      second.advanceReducedMotion(0);
+      expect(second.renderPositions[0], const Offset(0, 209));
+
+      second.advanceReducedMotion(1);
+      expect(second.phase, WhoPaysLotteryPhase.seated);
+      expect(second.gateProgress, 0);
+      expect(second.renderPositions[2], const Offset(0, 209));
+      expect(
+        second.renderPositions[0].distance,
+        lessThanOrEqualTo(WhoPaysLotterySimulation.maxBallCenterRadius + 0.001),
+        reason: 'previous winner must end up back inside the chamber',
+      );
+    });
   });
 }
 
