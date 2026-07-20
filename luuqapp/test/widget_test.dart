@@ -9,6 +9,7 @@ import 'package:luuqapp/licensing/feature_flags.dart';
 import 'package:luuqapp/licensing/license_gate.dart';
 import 'package:luuqapp/licensing/license_service.dart';
 import 'package:luuqapp/licensing/license_status.dart';
+import 'package:luuqapp/src/who_pays/lottery_simulation.dart';
 
 void main() {
   setUpAll(_loadRobotoForWidgetTests);
@@ -66,7 +67,11 @@ void main() {
     await tester.pump();
     expect(find.text('KARILIYOR...'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 4100));
+    await tester.pump(
+      Duration(
+        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
+      ),
+    );
     await tester.pump();
 
     expect(
@@ -78,6 +83,50 @@ void main() {
       find.bySemanticsLabel(RegExp(r'Kazanan top çıkışta: [1-6]\. kişi')),
       findsOneWidget,
     );
+
+    // Yeniden çekiliş: sonuç topu geri emilir, yeni çekiliş tam süre oynar.
+    await tester.tap(find.text('Tekrar Çek'));
+    await tester.pump();
+    expect(find.text('KARILIYOR...'), findsOneWidget);
+
+    // Süreklilik kanıtı: yeniden çekiliş intake nedeniyle 3850 ms sürer —
+    // idle süre + pay geçtikten sonra sonuç HENÜZ görünmemeli.
+    //
+    // Not: kontrol noktası idle süreden (3400 ms) sadece 200 ms sonraya
+    // konursa kanıt yanlış pozitif verir: sonuç paneli ile "KARILIYOR..."
+    // düğmesi arasında 300 ms'lik bir AnimatedSwitcher geçişi var, bu
+    // yüzden bozuk/eski (initialState geçirilmemiş) 3400 ms'lik bir
+    // simülasyon bile 3400+200=3600 ms'de "KARILIYOR..." widget'ını hâlâ
+    // (geçiş animasyonunun kalıntısı olarak) ağaçta bırakır. Kontrol
+    // noktasını, 300 ms'lik geçişi geride bırakacak ama gerçek 3850 ms'lik
+    // yeniden çekilişin bitişinden (idle + 450 ms) önce kalacak şekilde
+    // idle + 375 ms'ye taşıyoruz.
+    const probeOffsetMs = 375;
+    await tester.pump(
+      const Duration(
+        milliseconds:
+            WhoPaysLotterySimulation.idleDurationMilliseconds + probeOffsetMs,
+      ),
+    );
+    expect(find.text('KARILIYOR...'), findsOneWidget);
+    expect(find.text('Tekrar Çek'), findsNothing);
+
+    await tester.pump(
+      Duration(
+        milliseconds:
+            WhoPaysLotterySimulation.redrawDurationMilliseconds +
+            200 -
+            WhoPaysLotterySimulation.idleDurationMilliseconds -
+            probeOffsetMs,
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.textContaining(RegExp(r'^Hesap [1-6]\. kişide! 🎉$')),
+      findsOneWidget,
+    );
+    expect(find.text('Tekrar Çek'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -106,7 +155,11 @@ void main() {
     expect(find.text('KARIŞTIR & ÇEK!'), findsNothing);
     expect(tester.takeException(), isNull);
 
-    await tester.pump(const Duration(milliseconds: 4100));
+    await tester.pump(
+      Duration(
+        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
+      ),
+    );
     await tester.pump();
     expect(find.text('Tekrar Çek'), findsOneWidget);
     expect(tester.takeException(), isNull);

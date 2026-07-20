@@ -3,10 +3,11 @@ import 'dart:ui';
 
 enum WhoPaysLotteryPhase {
   idle,
+  intake,
   spinUp,
   mixing,
   settling,
-  gateOpening,
+  capture,
   dropping,
   seated,
 }
@@ -33,28 +34,62 @@ class WhoPaysStepReport {
 /// Package-internal simulation for the Hesap Kimde lottery machine.
 ///
 /// The winner is supplied by the caller. Physics only controls presentation;
-/// it never selects or changes the result.
+/// it never selects or changes the result. No winner-specific force may run
+/// before the capture phase starts ([winnerGuideApplications] proves it).
 class WhoPaysLotterySimulation {
   WhoPaysLotterySimulation({
     required this.personCount,
     required this.winnerIndex,
     required this.seed,
+    WhoPaysInitialState? initialState,
   }) : assert(personCount >= 2 && personCount <= 6),
        assert(winnerIndex >= 0 && winnerIndex < personCount),
-       _random = Random(seed) {
-    _initializeBalls();
+       assert(
+         initialState == null ||
+             initialState.chamberPositions.length == personCount,
+       ),
+       _random = Random(seed),
+       _intakeBallIndex = initialState?.seatedBallIndex,
+       _phaseShift = initialState?.seatedBallIndex != null
+           ? intakeDurationSeconds
+           : 0 {
+    if (initialState != null) {
+      for (var index = 0; index < personCount; index++) {
+        final position = index == initialState.seatedBallIndex
+            ? const Offset(0, winnerSeatY)
+            : initialState.chamberPositions[index];
+        balls.add(WhoPaysBallState(position: position));
+      }
+      _reducedMotionStartPositions.addAll(balls.map((ball) => ball.position));
+    } else {
+      _initializeBalls();
+    }
     _updatePresentation();
   }
 
-  // The shorter presentation restores the pace of the original game while
-  // leaving enough time to see the physical mix and the selected-ball drop.
-  static const int durationMilliseconds = 3400;
-  static const double durationSeconds = durationMilliseconds / 1000;
-  static const double spinUpEndSeconds = 0.18;
-  static const double mixingEndSeconds = 2.20;
-  static const double settlingEndSeconds = 2.72;
-  static const double gateOpeningEndSeconds = 2.92;
-  static const double droppingEndSeconds = 3.32;
+  // Draw-relative timeline offsets. _phaseShift carries the intake prologue
+  // for continue-starts (intakeDurationSeconds when seeded from a previous
+  // draw's exportState, 0 for a fresh draw).
+  static const double _spinUpEnd = 0.18;
+  static const double _mixingEnd = 2.05;
+  static const double _settlingEnd = 2.55;
+  static const double _captureEnd = 3.00;
+  static const double _droppingEnd = 3.32;
+  static const double _idleDuration = 3.40;
+  static const double _gateOpenLength = 0.15;
+  static const double _gateCloseStart = 3.10;
+  static const double _gateCloseEnd = 3.30;
+  static const double _guaranteeWindow = 0.30;
+
+  static const int idleDurationMilliseconds = 3400;
+
+  static const double intakeDurationSeconds = 0.45;
+  static const int redrawDurationMilliseconds = 3850;
+  static const double _intakeSuction = 3400.0;
+  static const double _intakePullStart = 0.06;
+  static const double _intakeGateOpenEnd = 0.12;
+  static const double _intakeGateCloseStart = 0.34;
+  static const double _intakeReleaseY = 95.0;
 
   static const double fixedStepSeconds = 1 / 120;
   static const int maxStepsPerFrame = 8;
@@ -66,10 +101,40 @@ class WhoPaysLotterySimulation {
   static const double chuteGravity = 1320.0;
   static const double maxRotorRadiansPerSecond = 6 * pi;
   static const double ballRestitution = 0.68;
-  static const double wallRestitution = 0.58;
+  // Raised from the legacy 0.58: with maxBallSpeed and mixingDragRate held
+  // at their spec-pinned values, balls need to keep most of their energy on
+  // a wall bounce so they rebound back toward the rotor instead of resting
+  // pinned against the glass.
+  static const double wallRestitution = 0.93;
   static const double bladeRestitution = 0.46;
   static const double bladeFriction = 0.15;
+  // Spec-pinned: must stay 760.0.
   static const double maxBallSpeed = 760.0;
+  // Raised from the legacy 3 iterations so deep multi-ball contacts (common
+  // once the winner is no longer staged out of the mix) fully separate
+  // within one physics step instead of leaving residual overlap.
+  static const int collisionPasses = 8;
+
+  // Spec-pinned: must stay 0.22 ("mixing'de 0.22 kalır").
+  static const double mixingDragRate = 0.22;
+  static const double settleDragRate = 2.0;
+  static const double tubeDragRate = 0.20;
+  // Winner-only drag while still in the chamber during capture. Lower than
+  // settleDragRate so the suction pull (below) isn't fighting heavy viscous
+  // damping while working the winner around chamber geometry toward the
+  // mouth. Losers keep settleDragRate.
+  static const double winnerCaptureDragRate = 0.6;
+
+  // Capture suction toward the tube mouth.
+  static const Offset mouthTarget = Offset(0, 126);
+  static const double suctionSpringRate = 90.0;
+  static const double suctionDampingRate = 2.5;
+  static const double suctionRampMax = 3200.0;
+  static const double suctionGuaranteeMax = 8000.0;
+
+  // Outward air cushion that clears losers away from the open mouth.
+  static const double cushionRadius = 55.0;
+  static const double cushionMax = 900.0;
 
   static const int rotorBladeCount = 3;
   static const double rotorHubRadius = 15.0;
@@ -82,14 +147,32 @@ class WhoPaysLotterySimulation {
   static const double rotorBladeInnerHalfWidth = 8.0;
   static const double rotorBladeOuterHalfWidth = 6.0;
 
-  static const Offset winnerStagingPosition = Offset(0, 103);
-  static const double chuteCenterHalfWidth = 3.5;
-  static const double winnerSeatY = 205.0;
+  // Vertical band where the winner leaves the chamber for the tube. The hard
+  // center clamp below it is temporary and is replaced by the funnel task.
+  static const double tubeEntryY = 100.0;
+  static const double funnelBottomY = 133.0;
+  static const double funnelTopHalfWidth = 38.0;
+  static const double tubeHalfWidth = 4.0;
+  static const double winnerSeatY = 209.0;
+
+  /// Resting slot angles on the floor arc (radians, π/2 = bottom center).
+  /// 0.42 rad ≈ 45 px of arc at r=107, wider than a 42 px ball, so relocated
+  /// balls can never overlap each other.
+  static const List<double> floorSlotAngles = <double>[
+    pi / 2,
+    pi / 2 + 0.42,
+    pi / 2 - 0.42,
+    pi / 2 + 0.84,
+    pi / 2 - 0.84,
+  ];
 
   final int personCount;
   final int winnerIndex;
   final int seed;
   final Random _random;
+  final double _phaseShift;
+  final int? _intakeBallIndex;
+  bool _intakeReleased = false;
 
   final List<WhoPaysBallState> balls = <WhoPaysBallState>[];
   final List<Offset> renderPositions = <Offset>[];
@@ -103,14 +186,37 @@ class WhoPaysLotterySimulation {
   WhoPaysLotteryPhase phase = WhoPaysLotteryPhase.idle;
 
   double _accumulator = 0;
-  bool _winnerLatched = false;
 
   /// Cumulative physical blade/hub impacts. Used by focused tests and local
   /// diagnostics to prove that mixing energy comes from rotor contact.
   int bladeCollisionCount = 0;
 
+  /// Incremented every physics step that applies the capture suction (or its
+  /// end-of-window guarantee) to the winner. Tests assert this stays 0 until
+  /// the capture phase starts.
+  int winnerGuideApplications = 0;
+
+  double get durationSeconds => _phaseShift + _idleDuration;
+  int get durationMilliseconds =>
+      _phaseShift > 0 ? redrawDurationMilliseconds : idleDurationMilliseconds;
+  double get spinUpEndSeconds => _phaseShift + _spinUpEnd;
+  double get mixingEndSeconds => _phaseShift + _mixingEnd;
+  double get settlingEndSeconds => _phaseShift + _settlingEnd;
+  double get captureEndSeconds => _phaseShift + _captureEnd;
+  double get droppingEndSeconds => _phaseShift + _droppingEnd;
+
   double get fanPower =>
       (rotorSpeed / maxRotorRadiansPerSecond).clamp(0.0, 1.0);
+
+  /// Allowed center half-width for a ball travelling the mouth funnel. Wide at
+  /// the chamber floor, narrowing linearly to the tube so per-step wall
+  /// projections stay tiny and no visible teleport can occur.
+  static double funnelHalfWidthAt(double dy) {
+    if (dy >= funnelBottomY) return tubeHalfWidth;
+    if (dy <= tubeEntryY) return funnelTopHalfWidth;
+    final t = (dy - tubeEntryY) / (funnelBottomY - tubeEntryY);
+    return funnelTopHalfWidth + (tubeHalfWidth - funnelTopHalfWidth) * t;
+  }
 
   static List<Offset> bladeSpinePoints(double angle, int bladeIndex) {
     final baseAngle = angle + bladeIndex * 2 * pi / rotorBladeCount;
@@ -169,10 +275,12 @@ class WhoPaysLotterySimulation {
     // controller has already completed, guarantee a valid in-app result rather
     // than leaving the selected ball suspended in the glass.
     if (target >= durationSeconds) {
-      final winner = balls[winnerIndex];
-      winner
+      balls[winnerIndex]
         ..position = const Offset(0, winnerSeatY)
         ..velocity = Offset.zero;
+      if (droppedCatchUp) {
+        _settleLosersToFloor();
+      }
     }
 
     _updatePresentation();
@@ -183,15 +291,31 @@ class WhoPaysLotterySimulation {
     );
   }
 
+  /// Snapshot of the current ball layout, used to seed the next draw's
+  /// continuity.
+  ///
+  /// Note: advanceReducedMotion never mutates [balls], so a reduced-motion
+  /// draw exports its construction-time layout — which is exactly what
+  /// reduced motion rendered for the losers. Keep it that way: mutating
+  /// balls there would desynchronize redraw continuity.
+  WhoPaysInitialState exportState() {
+    return WhoPaysInitialState(
+      chamberPositions: List<Offset>.unmodifiable(
+        balls.map((ball) => ball.position),
+      ),
+      seatedBallIndex: phase == WhoPaysLotteryPhase.seated ? winnerIndex : null,
+    );
+  }
+
   void advanceReducedMotion(double progress) {
     final value = progress.clamp(0.0, 1.0);
     timelineSeconds = value * durationSeconds;
     rotorSpeed = 0;
     rotorAngle = 0;
-    gateProgress = _smoothStep(value);
+    gateProgress = 0;
     phase = value >= 1
         ? WhoPaysLotteryPhase.seated
-        : WhoPaysLotteryPhase.gateOpening;
+        : WhoPaysLotteryPhase.capture;
     contentOpacity = (2 * value - 1).abs().clamp(0.0, 1.0);
 
     renderPositions
@@ -199,21 +323,39 @@ class WhoPaysLotterySimulation {
       ..addAll(
         value < 0.5
             ? _reducedMotionStartPositions
-            : List<Offset>.generate(personCount, (index) {
-                if (index == winnerIndex) {
-                  return const Offset(0, winnerSeatY);
-                }
-                return _reducedMotionStartPositions[index];
-              }),
+            : _reducedMotionEndPositions(),
       );
+  }
+
+  List<Offset> _reducedMotionEndPositions() {
+    final positions = List<Offset>.from(_reducedMotionStartPositions);
+    positions[winnerIndex] = const Offset(0, winnerSeatY);
+    final intakeBallIndex = _intakeBallIndex;
+    if (intakeBallIndex != null && intakeBallIndex != winnerIndex) {
+      // Önceki kazanan fanusa döner: diğer görünen toplarla çakışmayan ilk
+      // taban slotu.
+      for (final angle in floorSlotAngles) {
+        final candidate = Offset.fromDirection(angle, maxBallCenterRadius);
+        final overlaps = positions.asMap().entries.any(
+          (entry) =>
+              entry.key != intakeBallIndex &&
+              (entry.value - candidate).distance < ballRadius * 2,
+        );
+        if (!overlaps) {
+          positions[intakeBallIndex] = candidate;
+          break;
+        }
+      }
+    }
+    return positions;
   }
 
   void _initializeBalls() {
     balls.clear();
     renderPositions.clear();
     _reducedMotionStartPositions.clear();
-    _winnerLatched = false;
     bladeCollisionCount = 0;
+    winnerGuideApplications = 0;
 
     const minimumDistance = ballRadius * 2 + 4;
     for (var index = 0; index < personCount; index++) {
@@ -257,9 +399,7 @@ class WhoPaysLotterySimulation {
       balls.add(WhoPaysBallState(position: position));
     }
 
-    _reducedMotionStartPositions.addAll(
-      balls.map((ball) => ball.position),
-    );
+    _reducedMotionStartPositions.addAll(balls.map((ball) => ball.position));
   }
 
   bool _isSafeInitialPosition(Offset candidate, double minimumDistance) {
@@ -273,85 +413,101 @@ class WhoPaysLotterySimulation {
   }
 
   double _stepPhysics(double dt, double stepTime) {
+    final drawTime = stepTime - _phaseShift;
     final stepRotorSpeed = _rotorSpeedAt(stepTime);
     final stepRotorAngle = _rotorAngleAt(stepTime);
-    final selecting = stepTime >= mixingEndSeconds;
-    final gateIsOpening = stepTime >= settlingEndSeconds;
-    final winnerReleased = stepTime >= gateOpeningEndSeconds;
+    final stepGateProgress = _gateProgressAt(stepTime);
+    final settling = drawTime >= _mixingEnd;
+    final capturing = drawTime >= _settlingEnd;
 
     for (var index = 0; index < balls.length; index++) {
       final ball = balls[index];
+      final isWinner = index == winnerIndex;
+      final winnerInTube =
+          isWinner && capturing && ball.position.dy >= tubeEntryY;
+      final intakeActive =
+          _phaseShift > 0 &&
+          stepTime < _phaseShift &&
+          index == _intakeBallIndex &&
+          !_intakeReleased;
+
       Offset acceleration;
       double dragRate;
 
-      if (index == winnerIndex && winnerReleased) {
-        acceleration = Offset(
-          -ball.position.dx * 260 - ball.velocity.dx * 26,
-          chuteGravity,
+      if (intakeActive) {
+        acceleration = stepTime >= _intakePullStart
+            ? const Offset(0, -_intakeSuction)
+            : Offset.zero;
+        dragRate = 0.3;
+      } else if (winnerInTube) {
+        final centering = _clampMagnitude(
+          Offset(-ball.position.dx * 260 - ball.velocity.dx * 26, 0),
+          2600,
         );
-        dragRate = 0.20;
+        acceleration = centering + const Offset(0, chuteGravity);
+        dragRate = tubeDragRate;
       } else {
         acceleration = const Offset(0, gravity);
-        dragRate = selecting ? 5.2 : 0.22;
+        dragRate = settling ? settleDragRate : mixingDragRate;
 
-        if (index == winnerIndex && selecting) {
-          final captureProgress = gateIsOpening
-              ? 1.0
-              : _smoothStep(
-                  (stepTime - mixingEndSeconds) /
-                      (settlingEndSeconds - mixingEndSeconds),
-                );
-          final guide =
-              (winnerStagingPosition - ball.position) * 86 -
-              ball.velocity * 17;
-          acceleration +=
-              _clampMagnitude(guide, 5200) * captureProgress;
+        if (isWinner && capturing) {
+          dragRate = winnerCaptureDragRate;
+          final ramp =
+              ((drawTime - _settlingEnd) / (_captureEnd - _settlingEnd)).clamp(
+                0.0,
+                1.0,
+              );
+          final limit = drawTime >= _captureEnd - _guaranteeWindow
+              ? suctionGuaranteeMax
+              : suctionRampMax * ramp;
+          final pull =
+              (mouthTarget - ball.position) * suctionSpringRate -
+              ball.velocity * suctionDampingRate;
+          acceleration += _clampMagnitude(pull, limit);
+          winnerGuideApplications++;
+        } else if (!isWinner &&
+            capturing &&
+            drawTime < _captureEnd &&
+            stepGateProgress > 0.5) {
+          final delta = ball.position - mouthTarget;
+          final distance = delta.distance;
+          if (distance < cushionRadius && distance > 0.001) {
+            acceleration +=
+                delta /
+                distance *
+                (cushionMax * (1 - distance / cushionRadius));
+          }
         }
-      }
-
-      if (_winnerLatched && index == winnerIndex && !winnerReleased) {
-        ball
-          ..position = winnerStagingPosition
-          ..velocity = Offset.zero;
-        continue;
       }
 
       ball.velocity += acceleration * dt;
       ball.velocity *= exp(-dragRate * dt);
       ball.position += ball.velocity * dt;
-    }
 
-    var maxImpactSpeed = 0.0;
-    for (var pass = 0; pass < 3; pass++) {
-      maxImpactSpeed = max(
-        maxImpactSpeed,
-        _resolveBallCollisions(stepTime),
-      );
-      maxImpactSpeed = max(
-        maxImpactSpeed,
-        _resolveRotorCollisions(stepRotorAngle, stepRotorSpeed),
-      );
-      maxImpactSpeed = max(
-        maxImpactSpeed,
-        _resolveBoundaries(stepTime),
-      );
-    }
+      if (index == _intakeBallIndex &&
+          !_intakeReleased &&
+          ball.position.dy < _intakeReleaseY) {
+        _intakeReleased = true;
+      }
 
-    if (selecting && !winnerReleased && !_winnerLatched) {
-      final winner = balls[winnerIndex];
-      if ((winner.position - winnerStagingPosition).distance <= 3.0 &&
-          winner.velocity.distance <= 90) {
-        _winnerLatched = true;
-        winner
-          ..position = winnerStagingPosition
-          ..velocity = Offset.zero;
+      if (_intakeBallIndex != null &&
+          !_intakeReleased &&
+          stepTime >= _phaseShift) {
+        // Time-bound: the intake exemptions must never outlive the prologue,
+        // even if a retuned suction fails to lift the ball past the release
+        // line.
+        _intakeReleased = true;
       }
     }
 
-    if (_winnerLatched && !winnerReleased) {
-      balls[winnerIndex]
-        ..position = winnerStagingPosition
-        ..velocity = Offset.zero;
+    var maxImpactSpeed = 0.0;
+    for (var pass = 0; pass < collisionPasses; pass++) {
+      maxImpactSpeed = max(maxImpactSpeed, _resolveBallCollisions(drawTime));
+      maxImpactSpeed = max(
+        maxImpactSpeed,
+        _resolveRotorCollisions(stepRotorAngle, stepRotorSpeed, drawTime),
+      );
+      maxImpactSpeed = max(maxImpactSpeed, _resolveBoundaries(drawTime));
     }
 
     for (final ball in balls) {
@@ -363,12 +519,10 @@ class WhoPaysLotterySimulation {
     return maxImpactSpeed;
   }
 
-  double _resolveBallCollisions(double stepTime) {
+  double _resolveBallCollisions(double drawTime) {
     var maxImpactSpeed = 0.0;
     const minimumDistance = ballRadius * 2;
-    final restitution = stepTime < mixingEndSeconds
-        ? ballRestitution
-        : 0.16;
+    final restitution = drawTime < _mixingEnd ? ballRestitution : 0.16;
 
     for (var firstIndex = 0; firstIndex < balls.length; firstIndex++) {
       for (
@@ -386,52 +540,46 @@ class WhoPaysLotterySimulation {
             ? delta / distance
             : Offset.fromDirection((firstIndex + secondIndex) * 0.9);
         final overlap = minimumDistance - distance;
-        final firstIsLatched = _winnerLatched &&
-            firstIndex == winnerIndex &&
-            stepTime < gateOpeningEndSeconds;
-        final secondIsLatched = _winnerLatched &&
-            secondIndex == winnerIndex &&
-            stepTime < gateOpeningEndSeconds;
-
-        if (firstIsLatched) {
-          second.position += normal * overlap;
-        } else if (secondIsLatched) {
-          first.position -= normal * overlap;
-        } else {
-          first.position -= normal * (overlap * 0.5);
-          second.position += normal * (overlap * 0.5);
-        }
+        first.position -= normal * (overlap * 0.5);
+        second.position += normal * (overlap * 0.5);
 
         final relativeVelocity = second.velocity - first.velocity;
         final normalSpeed = _dot(relativeVelocity, normal);
         if (normalSpeed >= 0) continue;
 
         maxImpactSpeed = max(maxImpactSpeed, -normalSpeed);
-        if (firstIsLatched) {
-          second.velocity -= normal * ((1 + restitution) * normalSpeed);
-        } else if (secondIsLatched) {
-          first.velocity += normal * ((1 + restitution) * normalSpeed);
-        } else {
-          final impulseMagnitude = -(1 + restitution) * normalSpeed / 2;
-          final impulse = normal * impulseMagnitude;
-          first.velocity -= impulse;
-          second.velocity += impulse;
-        }
+        final impulseMagnitude = -(1 + restitution) * normalSpeed / 2;
+        final impulse = normal * impulseMagnitude;
+        first.velocity -= impulse;
+        second.velocity += impulse;
       }
     }
     return maxImpactSpeed;
   }
 
-  double _resolveRotorCollisions(double angle, double angularVelocity) {
+  double _resolveRotorCollisions(
+    double angle,
+    double angularVelocity,
+    double drawTime,
+  ) {
     var maxImpactSpeed = 0.0;
     for (var ballIndex = 0; ballIndex < balls.length; ballIndex++) {
-      if (ballIndex == winnerIndex &&
-          timelineSeconds >= gateOpeningEndSeconds &&
-          balls[ballIndex].position.dy > winnerStagingPosition.dy) {
+      // From capture onward the winner is exempt from rotor contact: the
+      // suction must be able to pull it across the stationary rotor's
+      // territory to the mouth. The rotor is drawn behind the balls and
+      // mostly transparent, so the pass-through is not visible.
+      if (ballIndex == winnerIndex && drawTime >= _settlingEnd) {
         continue;
       }
 
       final ball = balls[ballIndex];
+      final skipAsIntakeBall =
+          ballIndex == _intakeBallIndex &&
+          !_intakeReleased &&
+          _phaseShift > 0 &&
+          ball.position.dy >= tubeEntryY;
+      if (skipAsIntakeBall) continue;
+
       final contact = _deepestRotorContact(ball.position, angle, ballIndex);
       if (contact == null) continue;
 
@@ -518,23 +666,26 @@ class WhoPaysLotterySimulation {
     return deepest;
   }
 
-  double _resolveBoundaries(double stepTime) {
+  double _resolveBoundaries(double drawTime) {
     var maxImpactSpeed = 0.0;
-    final winnerReleased = stepTime >= gateOpeningEndSeconds;
 
     for (var index = 0; index < balls.length; index++) {
       final ball = balls[index];
-      final inWinnerChute = index == winnerIndex &&
-          winnerReleased &&
-          ball.position.dy >= winnerStagingPosition.dy - 8;
+      final winnerInTube =
+          index == winnerIndex &&
+          drawTime >= _settlingEnd &&
+          ball.position.dy >= tubeEntryY;
+      final intakeInTube =
+          index == _intakeBallIndex &&
+          !_intakeReleased &&
+          _phaseShift > 0 &&
+          ball.position.dy >= tubeEntryY;
 
-      if (inWinnerChute) {
-        if (ball.position.dx.abs() > chuteCenterHalfWidth) {
+      if (winnerInTube || intakeInTube) {
+        final halfWidth = funnelHalfWidthAt(ball.position.dy);
+        if (ball.position.dx.abs() > halfWidth) {
           final normal = Offset(ball.position.dx.sign, 0);
-          ball.position = Offset(
-            normal.dx * chuteCenterHalfWidth,
-            ball.position.dy,
-          );
+          ball.position = Offset(normal.dx * halfWidth, ball.position.dy);
           final normalSpeed = _dot(ball.velocity, normal);
           if (normalSpeed > 0) {
             maxImpactSpeed = max(maxImpactSpeed, normalSpeed);
@@ -561,19 +712,13 @@ class WhoPaysLotterySimulation {
       if (normalSpeed <= 0) continue;
 
       maxImpactSpeed = max(maxImpactSpeed, normalSpeed);
-      final restitution = stepTime < mixingEndSeconds
-          ? wallRestitution
-          : 0.12;
+      final restitution = drawTime < _mixingEnd ? wallRestitution : 0.12;
       ball.velocity -= normal * ((1 + restitution) * normalSpeed);
     }
     return maxImpactSpeed;
   }
 
-  bool _overlapsRotor(
-    Offset position,
-    double angle, {
-    double clearance = 0,
-  }) {
+  bool _overlapsRotor(Offset position, double angle, {double clearance = 0}) {
     if (position.distance < ballRadius + rotorHubRadius + clearance) {
       return true;
     }
@@ -603,67 +748,112 @@ class WhoPaysLotterySimulation {
       ..addAll(balls.map((ball) => ball.position));
   }
 
-  static WhoPaysLotteryPhase _phaseFor(double seconds) {
-    if (seconds <= 0) return WhoPaysLotteryPhase.idle;
-    if (seconds < spinUpEndSeconds) return WhoPaysLotteryPhase.spinUp;
-    if (seconds < mixingEndSeconds) return WhoPaysLotteryPhase.mixing;
-    if (seconds < settlingEndSeconds) return WhoPaysLotteryPhase.settling;
-    if (seconds < gateOpeningEndSeconds) {
-      return WhoPaysLotteryPhase.gateOpening;
+  /// Deterministically parks every loser on the floor arc. Used only when the
+  /// timeline finishes via a resume/background jump, so the last frame never
+  /// shows balls frozen mid-air.
+  void _settleLosersToFloor() {
+    assert(
+      balls.length - 1 <= floorSlotAngles.length,
+      'floor slots must cover every loser',
+    );
+    final used = List<bool>.filled(floorSlotAngles.length, false);
+    for (var index = 0; index < balls.length; index++) {
+      if (index == winnerIndex) continue;
+      final currentAngle = balls[index].position.direction;
+      var best = 0;
+      var bestDifference = double.infinity;
+      for (var slot = 0; slot < floorSlotAngles.length; slot++) {
+        if (used[slot]) continue;
+        final raw = floorSlotAngles[slot] - currentAngle;
+        final difference = atan2(sin(raw), cos(raw)).abs();
+        if (difference < bestDifference) {
+          bestDifference = difference;
+          best = slot;
+        }
+      }
+      used[best] = true;
+      balls[index]
+        ..position = Offset.fromDirection(
+          floorSlotAngles[best],
+          maxBallCenterRadius,
+        )
+        ..velocity = Offset.zero;
     }
-    if (seconds < droppingEndSeconds) return WhoPaysLotteryPhase.dropping;
+  }
+
+  WhoPaysLotteryPhase _phaseFor(double seconds) {
+    if (seconds <= 0) return WhoPaysLotteryPhase.idle;
+    if (seconds < _phaseShift) return WhoPaysLotteryPhase.intake;
+    final t = seconds - _phaseShift;
+    if (t < _spinUpEnd) return WhoPaysLotteryPhase.spinUp;
+    if (t < _mixingEnd) return WhoPaysLotteryPhase.mixing;
+    if (t < _settlingEnd) return WhoPaysLotteryPhase.settling;
+    if (t < _captureEnd) return WhoPaysLotteryPhase.capture;
+    if (t < _droppingEnd) return WhoPaysLotteryPhase.dropping;
     return WhoPaysLotteryPhase.seated;
   }
 
-  static double _rotorSpeedAt(double seconds) {
-    if (seconds <= 0 || seconds >= settlingEndSeconds) return 0;
-    if (seconds < spinUpEndSeconds) {
-      return maxRotorRadiansPerSecond * _smoothStep(seconds / spinUpEndSeconds);
+  double _rotorSpeedAt(double seconds) {
+    final t = seconds - _phaseShift;
+    if (t <= 0 || t >= _settlingEnd) return 0;
+    if (t < _spinUpEnd) {
+      return maxRotorRadiansPerSecond * _smoothStep(t / _spinUpEnd);
     }
-    if (seconds < mixingEndSeconds) return maxRotorRadiansPerSecond;
-    final progress =
-        (seconds - mixingEndSeconds) / (settlingEndSeconds - mixingEndSeconds);
+    if (t < _mixingEnd) return maxRotorRadiansPerSecond;
+    final progress = (t - _mixingEnd) / (_settlingEnd - _mixingEnd);
     return maxRotorRadiansPerSecond * (1 - _smoothStep(progress));
   }
 
-  static double _rotorAngleAt(double seconds) {
-    final clamped = seconds.clamp(0.0, settlingEndSeconds);
-    if (clamped <= spinUpEndSeconds) {
-      final progress = clamped / spinUpEndSeconds;
+  double _rotorAngleAt(double seconds) {
+    final clamped = (seconds - _phaseShift).clamp(0.0, _settlingEnd);
+    if (clamped <= _spinUpEnd) {
+      final progress = clamped / _spinUpEnd;
       return maxRotorRadiansPerSecond *
-          spinUpEndSeconds *
+          _spinUpEnd *
           (pow(progress, 3) - 0.5 * pow(progress, 4));
     }
 
-    var angle = maxRotorRadiansPerSecond * spinUpEndSeconds * 0.5;
-    final constantEnd = min(clamped, mixingEndSeconds);
-    angle +=
-        maxRotorRadiansPerSecond * max(0.0, constantEnd - spinUpEndSeconds);
-    if (clamped <= mixingEndSeconds) return angle;
+    var angle = maxRotorRadiansPerSecond * _spinUpEnd * 0.5;
+    final constantEnd = min(clamped, _mixingEnd);
+    angle += maxRotorRadiansPerSecond * max(0.0, constantEnd - _spinUpEnd);
+    if (clamped <= _mixingEnd) return angle;
 
-    final progress =
-        (clamped - mixingEndSeconds) / (settlingEndSeconds - mixingEndSeconds);
+    final progress = (clamped - _mixingEnd) / (_settlingEnd - _mixingEnd);
     angle +=
         maxRotorRadiansPerSecond *
-        (settlingEndSeconds - mixingEndSeconds) *
+        (_settlingEnd - _mixingEnd) *
         (progress - pow(progress, 3) + 0.5 * pow(progress, 4));
     return angle;
   }
 
-  static double _gateProgressAt(double seconds) {
-    if (seconds <= settlingEndSeconds) return 0;
-    if (seconds >= gateOpeningEndSeconds) return 1;
-    return _smoothStep(
-      (seconds - settlingEndSeconds) /
-          (gateOpeningEndSeconds - settlingEndSeconds),
-    );
+  double _gateProgressAt(double seconds) {
+    if (_phaseShift > 0 && seconds < _phaseShift) {
+      if (seconds < _intakeGateOpenEnd) {
+        return _smoothStep(seconds / _intakeGateOpenEnd);
+      }
+      if (seconds < _intakeGateCloseStart) return 1;
+      return 1 -
+          _smoothStep(
+            (seconds - _intakeGateCloseStart) /
+                (_phaseShift - _intakeGateCloseStart),
+          );
+    }
+    final t = seconds - _phaseShift;
+    if (t <= _settlingEnd) return 0;
+    if (t < _settlingEnd + _gateOpenLength) {
+      return _smoothStep((t - _settlingEnd) / _gateOpenLength);
+    }
+    if (t < _gateCloseStart) return 1;
+    if (t < _gateCloseEnd) {
+      return 1 -
+          _smoothStep(
+            (t - _gateCloseStart) / (_gateCloseEnd - _gateCloseStart),
+          );
+    }
+    return 0;
   }
 
-  static Offset _closestPointOnSegment(
-    Offset point,
-    Offset start,
-    Offset end,
-  ) {
+  static Offset _closestPointOnSegment(Offset point, Offset start, Offset end) {
     final segment = end - start;
     final lengthSquared = _dot(segment, segment);
     if (lengthSquared <= 1e-9) return start;
@@ -700,4 +890,16 @@ class _RotorContact {
   final Offset point;
   final Offset normal;
   final double penetration;
+}
+
+/// Snapshot of a finished draw used to seed the next one, so the machine
+/// animates continuously instead of teleporting to a fresh layout.
+class WhoPaysInitialState {
+  const WhoPaysInitialState({
+    required this.chamberPositions,
+    this.seatedBallIndex,
+  });
+
+  final List<Offset> chamberPositions;
+  final int? seatedBallIndex;
 }
