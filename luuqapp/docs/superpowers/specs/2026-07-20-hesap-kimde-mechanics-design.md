@@ -188,3 +188,32 @@ bitmiş sayılmaz.
   taramalı testler kanıtlar.
 - **Golden churn**: koreografi değiştiği için tüm golden'lar yeniden üretilir;
   incelemede kareler gözle doğrulanır.
+
+## Uygulama notları (post-execution, 20 Temmuz 2026)
+
+Aşağıdaki adjudike edilmiş sapmalar orijinal metne göre değişse de gönderilen
+(shipped) davranıştır:
+
+1. Emme sabitleri: suctionSpringRate 60→90, suctionDampingRate 14→2.5,
+   suctionRampMax 3200 (değişmedi), suctionGuaranteeMax 5200→8000; garanti
+   penceresi son 100 ms→son 300 ms (`_guaranteeWindow=0.30`, yük taşıyor —
+   0.25'te varış kaçıyor; gelecekteki ayarlarda payı yok).
+2. Karışım hissi: wallRestitution 0.58→0.93, çarpışma çözüm geçişi 3→8
+   (`collisionPasses`) — depodaki önceden-kırık iki karışım testi (örtüşme
+   ve duvara yapışma) ancak bu değerlerle geçiyor; spec'in sabitlediği 760
+   hız limiti ve 0.22 mixing drag korunuyor.
+3. Kazanan, capture fazından itibaren rotor temasından muaf (yapısal): düz
+   hat emiş, duran rotorun kanadına/göbeğine sıkışıyordu; rotor topların
+   arkasında ve yarı saydam olduğundan görsel etkisi yok.
+4. Kazanan, capture sırasında fanustayken 0.6 drag kullanır
+   (`winnerCaptureDragRate`); kaybedenler 2.0'da kalır.
+5. Işınlanma-yok invaryantı faz-ölçekli: rotor aktifken 32 px/kare (meşru
+   kanat darbesi), settling'den sonra 24 px/kare (spec'teki "ör. 16 px"
+   örneği yerine).
+6. Resume yerleştirme tetikleyicisi yalnız droppedCatchUp (hız>150 koşulu,
+   sürekli oynatımın son karesindeki meşru artık hız yüzünden kaldırıldı).
+   Kabul edilen sınırlama: bitişten <66 ms önce inen iki-çağrılık resume,
+   kaybedenleri havada bırakabilir.
+7. Rotor açısı exportState'e dahil değil: yeniden çekilişin ilk karesinde
+   rotor ~13° atlar (3 kanatlı simetriyle fark edilmesi güç) — kabul
+   edilmiş cila sınırı.

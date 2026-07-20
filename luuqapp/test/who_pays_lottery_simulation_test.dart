@@ -239,6 +239,30 @@ void main() {
               ),
             );
           }
+
+          for (
+            var first = 0;
+            first < simulation.personCount;
+            first++
+          ) {
+            if (first == winnerIndex) continue;
+            for (
+              var second = first + 1;
+              second < simulation.personCount;
+              second++
+            ) {
+              if (second == winnerIndex) continue;
+              expect(
+                (simulation.renderPositions[first] -
+                        simulation.renderPositions[second])
+                    .distance,
+                greaterThanOrEqualTo(41),
+                reason:
+                    'losers $first and $second end-state overlap for '
+                    'winner $personCount/$seed',
+              );
+            }
+          }
         });
       }
     }
@@ -340,12 +364,14 @@ void main() {
         seed: 606,
       );
 
+      var sawTube = false;
       var target = 0.0;
       while (target < simulation.durationSeconds) {
         target = math.min(target + 1 / 120, simulation.durationSeconds);
         simulation.advanceTo(target);
         final winner = simulation.renderPositions[5];
         if (winner.dy >= WhoPaysLotterySimulation.tubeEntryY) {
+          sawTube = true;
           expect(
             winner.dx.abs(),
             lessThanOrEqualTo(
@@ -354,6 +380,11 @@ void main() {
           );
         }
       }
+      expect(
+        sawTube,
+        isTrue,
+        reason: 'winner never entered the funnel — assertions were vacuous',
+      );
     });
 
     test('a resume jump leaves no loser suspended mid-air', () {

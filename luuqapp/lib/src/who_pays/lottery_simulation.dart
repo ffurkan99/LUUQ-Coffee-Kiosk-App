@@ -291,6 +291,13 @@ class WhoPaysLotterySimulation {
     );
   }
 
+  /// Snapshot of the current ball layout, used to seed the next draw's
+  /// continuity.
+  ///
+  /// Note: advanceReducedMotion never mutates [balls], so a reduced-motion
+  /// draw exports its construction-time layout — which is exactly what
+  /// reduced motion rendered for the losers. Keep it that way: mutating
+  /// balls there would desynchronize redraw continuity.
   WhoPaysInitialState exportState() {
     return WhoPaysInitialState(
       chamberPositions: List<Offset>.unmodifiable(
@@ -480,6 +487,15 @@ class WhoPaysLotterySimulation {
       if (index == _intakeBallIndex &&
           !_intakeReleased &&
           ball.position.dy < _intakeReleaseY) {
+        _intakeReleased = true;
+      }
+
+      if (_intakeBallIndex != null &&
+          !_intakeReleased &&
+          stepTime >= _phaseShift) {
+        // Time-bound: the intake exemptions must never outlive the prologue,
+        // even if a retuned suction fails to lift the ball past the release
+        // line.
         _intakeReleased = true;
       }
     }
