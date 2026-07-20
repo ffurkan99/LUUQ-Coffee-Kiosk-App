@@ -73,25 +73,22 @@ class WhoPaysLotterySimulation {
   static const double chuteGravity = 1320.0;
   static const double maxRotorRadiansPerSecond = 6 * pi;
   static const double ballRestitution = 0.68;
-  // Raised from the legacy 0.58: with the neutral (non-staged) mix, balls
-  // that reach the glass need to keep more of their energy so they carry on
-  // circulating instead of resting pinned against the outer wall.
-  static const double wallRestitution = 0.68;
-  // Lowered from the legacy 0.46 so a rotor hit injects less raw speed,
-  // which keeps balls from being flung out to the glass and staying there.
-  static const double bladeRestitution = 0.2;
+  // Raised from the legacy 0.58: with maxBallSpeed and mixingDragRate held
+  // at their spec-pinned values, balls need to keep most of their energy on
+  // a wall bounce so they rebound back toward the rotor instead of resting
+  // pinned against the glass.
+  static const double wallRestitution = 0.93;
+  static const double bladeRestitution = 0.46;
   static const double bladeFriction = 0.15;
-  // Lowered from the legacy 760: caps how far a single rotor hit can fling a
-  // ball, reducing time spent skimming the outer wall during mixing.
-  static const double maxBallSpeed = 620.0;
+  // Spec-pinned: must stay 760.0.
+  static const double maxBallSpeed = 760.0;
   // Raised from the legacy 3 iterations so deep multi-ball contacts (common
   // once the winner is no longer staged out of the mix) fully separate
   // within one physics step instead of leaving residual overlap.
   static const int collisionPasses = 8;
 
-  // Raised from the legacy 0.22 so balls bleed excess speed between rotor
-  // hits rather than continuously skimming the outer wall through mixing.
-  static const double mixingDragRate = 1.3;
+  // Spec-pinned: must stay 0.22 ("mixing'de 0.22 kalır").
+  static const double mixingDragRate = 0.22;
   static const double settleDragRate = 2.0;
   static const double tubeDragRate = 0.20;
 
