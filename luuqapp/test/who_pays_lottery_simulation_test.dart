@@ -143,7 +143,7 @@ void main() {
       expect(simulation.phase, WhoPaysLotteryPhase.seated);
       expect(simulation.gateProgress, 1);
       expect(simulation.renderPositions[winnerIndex].dx, closeTo(0, 0.001));
-      expect(simulation.renderPositions[winnerIndex].dy, closeTo(205, 0.001));
+      expect(simulation.renderPositions[winnerIndex].dy, closeTo(209, 0.001));
       for (var index = 0; index < simulation.personCount; index++) {
         if (index == winnerIndex) continue;
         expect(
@@ -195,7 +195,7 @@ void main() {
 
       simulation.advanceReducedMotion(1);
       expect(simulation.phase, WhoPaysLotteryPhase.seated);
-      expect(simulation.renderPositions[1], const Offset(0, 205));
+      expect(simulation.renderPositions[1], const Offset(0, 209));
       expect(simulation.contentOpacity, 1);
     });
   });

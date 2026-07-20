@@ -290,8 +290,10 @@ class _LotteryMachineContentPainter extends CustomPainter {
   }
 
   void _paintGate(Canvas canvas, Offset center) {
-    const gateHalfWidth = 21.0;
-    final hinge = Offset(center.dx - gateHalfWidth, center.dy + 128);
+    const gateHalfWidth = 25.0;
+    // Kiriş: cam kürenin tüp duvarlarıyla kesiştiği omuz hattı.
+    final chordY = center.dy + sqrt(135.0 * 135.0 - gateHalfWidth * gateHalfWidth);
+    final hinge = Offset(center.dx - gateHalfWidth, chordY);
     final angle = pi * 0.5 * simulation.gateProgress;
 
     canvas.save();

@@ -84,7 +84,7 @@ class WhoPaysLotterySimulation {
 
   static const Offset winnerStagingPosition = Offset(0, 103);
   static const double chuteCenterHalfWidth = 3.5;
-  static const double winnerSeatY = 205.0;
+  static const double winnerSeatY = 209.0;
 
   final int personCount;
   final int winnerIndex;
