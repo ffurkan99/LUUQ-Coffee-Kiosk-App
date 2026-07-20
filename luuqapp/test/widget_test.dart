@@ -9,6 +9,7 @@ import 'package:luuqapp/licensing/feature_flags.dart';
 import 'package:luuqapp/licensing/license_gate.dart';
 import 'package:luuqapp/licensing/license_service.dart';
 import 'package:luuqapp/licensing/license_status.dart';
+import 'package:luuqapp/src/who_pays/lottery_simulation.dart';
 
 void main() {
   setUpAll(_loadRobotoForWidgetTests);
@@ -66,7 +67,11 @@ void main() {
     await tester.pump();
     expect(find.text('KARILIYOR...'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 4100));
+    await tester.pump(
+      Duration(
+        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
+      ),
+    );
     await tester.pump();
 
     expect(
@@ -106,7 +111,11 @@ void main() {
     expect(find.text('KARIŞTIR & ÇEK!'), findsNothing);
     expect(tester.takeException(), isNull);
 
-    await tester.pump(const Duration(milliseconds: 4100));
+    await tester.pump(
+      Duration(
+        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
+      ),
+    );
     await tester.pump();
     expect(find.text('Tekrar Çek'), findsOneWidget);
     expect(tester.takeException(), isNull);

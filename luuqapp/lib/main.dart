@@ -5128,7 +5128,7 @@ class _LotteryMachineState extends State<_LotteryMachine>
     _simulation = _createSimulation(seed: widget.personCount * 997);
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 4000),
+      duration: Duration(milliseconds: _simulation.durationMilliseconds),
     );
     _controller.addListener(_handleAnimationTick);
     _controller.addStatusListener((status) {
@@ -5156,7 +5156,7 @@ class _LotteryMachineState extends State<_LotteryMachine>
     }
 
     final report = _simulation.advanceTo(
-      _controller.value * WhoPaysLotterySimulation.durationSeconds,
+      _controller.value * _simulation.durationSeconds,
     );
     if (report.maxImpactSpeed < 90) return;
 
@@ -5177,7 +5177,9 @@ class _LotteryMachineState extends State<_LotteryMachine>
     if (_reduceMotion == reduceMotion) return;
 
     _reduceMotion = reduceMotion;
-    _controller.duration = Duration(milliseconds: reduceMotion ? 180 : 4000);
+    _controller.duration = Duration(
+      milliseconds: reduceMotion ? 180 : _simulation.durationMilliseconds,
+    );
   }
 
   @override

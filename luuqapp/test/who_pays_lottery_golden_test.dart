@@ -35,18 +35,18 @@ void main() {
     );
   });
 
-  testWidgets('lottery machine gate opening appearance', (tester) async {
+  testWidgets('lottery machine capture appearance', (tester) async {
     await _expectMachineGolden(
       tester,
-      seconds: 3.275,
-      goldenName: 'who_pays_gate_opening.png',
+      seconds: 2.80,
+      goldenName: 'who_pays_capture.png',
     );
   });
 
   testWidgets('lottery machine result appearance', (tester) async {
     await _expectMachineGolden(
       tester,
-      seconds: 4,
+      seconds: 3.40,
       goldenName: 'who_pays_result.png',
     );
   });
