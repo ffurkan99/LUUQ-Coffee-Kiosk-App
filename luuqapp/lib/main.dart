@@ -5147,6 +5147,12 @@ class _LotteryMachineState extends State<_LotteryMachine>
     );
   }
 
+  void _syncControllerDuration() {
+    _controller.duration = Duration(
+      milliseconds: _reduceMotion ? 180 : _simulation.durationMilliseconds,
+    );
+  }
+
   void _handleAnimationTick() {
     if (!mounted || !widget.isAnimating) return;
 
@@ -5177,9 +5183,7 @@ class _LotteryMachineState extends State<_LotteryMachine>
     if (_reduceMotion == reduceMotion) return;
 
     _reduceMotion = reduceMotion;
-    _controller.duration = Duration(
-      milliseconds: reduceMotion ? 180 : _simulation.durationMilliseconds,
-    );
+    _syncControllerDuration();
   }
 
   @override
@@ -5187,14 +5191,26 @@ class _LotteryMachineState extends State<_LotteryMachine>
     super.didUpdateWidget(oldWidget);
     if (widget.isAnimating && !oldWidget.isAnimating) {
       _lastImpactSoundAt = null;
-      _simulation = _createSimulation(seed: _seedRandom.nextInt(0x7fffffff));
+      final previous = _simulation;
+      _simulation = WhoPaysLotterySimulation(
+        personCount: widget.personCount,
+        winnerIndex: _safeWinnerIndex,
+        seed: _seedRandom.nextInt(0x7fffffff),
+        initialState: previous.personCount == widget.personCount &&
+                previous.phase == WhoPaysLotteryPhase.seated
+            ? previous.exportState()
+            : null,
+      );
+      _syncControllerDuration();
       _controller.forward(from: 0);
     } else if (!widget.showResult && oldWidget.showResult) {
       _controller.reset();
       _simulation = _createSimulation(seed: widget.personCount * 997);
+      _syncControllerDuration();
     } else if (widget.personCount != oldWidget.personCount) {
       _controller.reset();
       _simulation = _createSimulation(seed: widget.personCount * 997);
+      _syncControllerDuration();
     }
   }
 

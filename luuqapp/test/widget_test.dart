@@ -83,6 +83,25 @@ void main() {
       find.bySemanticsLabel(RegExp(r'Kazanan top çıkışta: [1-6]\. kişi')),
       findsOneWidget,
     );
+
+    // Yeniden çekiliş: sonuç topu geri emilir, yeni çekiliş tam süre oynar.
+    await tester.tap(find.text('Tekrar Çek'));
+    await tester.pump();
+    expect(find.text('KARILIYOR...'), findsOneWidget);
+
+    await tester.pump(
+      Duration(
+        milliseconds:
+            WhoPaysLotterySimulation.redrawDurationMilliseconds + 200,
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.textContaining(RegExp(r'^Hesap [1-6]\. kişide! 🎉$')),
+      findsOneWidget,
+    );
+    expect(find.text('Tekrar Çek'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
