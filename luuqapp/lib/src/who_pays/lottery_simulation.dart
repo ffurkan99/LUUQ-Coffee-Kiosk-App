@@ -59,7 +59,7 @@ class WhoPaysLotterySimulation {
   static const double _gateOpenLength = 0.15;
   static const double _gateCloseStart = 3.10;
   static const double _gateCloseEnd = 3.30;
-  static const double _guaranteeWindow = 0.10;
+  static const double _guaranteeWindow = 0.30;
 
   static const int idleDurationMilliseconds = 3400;
 
@@ -91,13 +91,18 @@ class WhoPaysLotterySimulation {
   static const double mixingDragRate = 0.22;
   static const double settleDragRate = 2.0;
   static const double tubeDragRate = 0.20;
+  // Winner-only drag while still in the chamber during capture. Lower than
+  // settleDragRate so the suction pull (below) isn't fighting heavy viscous
+  // damping while working the winner around chamber geometry toward the
+  // mouth. Losers keep settleDragRate.
+  static const double winnerCaptureDragRate = 0.6;
 
   // Capture suction toward the tube mouth.
   static const Offset mouthTarget = Offset(0, 126);
-  static const double suctionSpringRate = 60.0;
-  static const double suctionDampingRate = 14.0;
+  static const double suctionSpringRate = 90.0;
+  static const double suctionDampingRate = 2.5;
   static const double suctionRampMax = 3200.0;
-  static const double suctionGuaranteeMax = 5200.0;
+  static const double suctionGuaranteeMax = 8000.0;
 
   // Outward air cushion that clears losers away from the open mouth.
   static const double cushionRadius = 55.0;
@@ -117,7 +122,9 @@ class WhoPaysLotterySimulation {
   // Vertical band where the winner leaves the chamber for the tube. The hard
   // center clamp below it is temporary and is replaced by the funnel task.
   static const double tubeEntryY = 100.0;
-  static const double chuteCenterHalfWidth = 3.5;
+  static const double funnelBottomY = 133.0;
+  static const double funnelTopHalfWidth = 38.0;
+  static const double tubeHalfWidth = 4.0;
   static const double winnerSeatY = 209.0;
 
   final int personCount;
@@ -158,6 +165,16 @@ class WhoPaysLotterySimulation {
 
   double get fanPower =>
       (rotorSpeed / maxRotorRadiansPerSecond).clamp(0.0, 1.0);
+
+  /// Allowed center half-width for a ball travelling the mouth funnel. Wide at
+  /// the chamber floor, narrowing linearly to the tube so per-step wall
+  /// projections stay tiny and no visible teleport can occur.
+  static double funnelHalfWidthAt(double dy) {
+    if (dy >= funnelBottomY) return tubeHalfWidth;
+    if (dy <= tubeEntryY) return funnelTopHalfWidth;
+    final t = (dy - tubeEntryY) / (funnelBottomY - tubeEntryY);
+    return funnelTopHalfWidth + (tubeHalfWidth - funnelTopHalfWidth) * t;
+  }
 
   static List<Offset> bladeSpinePoints(double angle, int bladeIndex) {
     final baseAngle = angle + bladeIndex * 2 * pi / rotorBladeCount;
@@ -347,6 +364,7 @@ class WhoPaysLotterySimulation {
         dragRate = settling ? settleDragRate : mixingDragRate;
 
         if (isWinner && capturing) {
+          dragRate = winnerCaptureDragRate;
           final ramp =
               ((drawTime - _settlingEnd) / (_captureEnd - _settlingEnd))
                   .clamp(0.0, 1.0);
@@ -448,9 +466,11 @@ class WhoPaysLotterySimulation {
   ) {
     var maxImpactSpeed = 0.0;
     for (var ballIndex = 0; ballIndex < balls.length; ballIndex++) {
-      if (ballIndex == winnerIndex &&
-          drawTime >= _settlingEnd &&
-          balls[ballIndex].position.dy >= tubeEntryY) {
+      // From capture onward the winner is exempt from rotor contact: the
+      // suction must be able to pull it across the stationary rotor's
+      // territory to the mouth. The rotor is drawn behind the balls and
+      // mostly transparent, so the pass-through is not visible.
+      if (ballIndex == winnerIndex && drawTime >= _settlingEnd) {
         continue;
       }
 
@@ -551,12 +571,10 @@ class WhoPaysLotterySimulation {
           ball.position.dy >= tubeEntryY;
 
       if (winnerInTube) {
-        if (ball.position.dx.abs() > chuteCenterHalfWidth) {
+        final halfWidth = funnelHalfWidthAt(ball.position.dy);
+        if (ball.position.dx.abs() > halfWidth) {
           final normal = Offset(ball.position.dx.sign, 0);
-          ball.position = Offset(
-            normal.dx * chuteCenterHalfWidth,
-            ball.position.dy,
-          );
+          ball.position = Offset(normal.dx * halfWidth, ball.position.dy);
           final normalSpeed = _dot(ball.velocity, normal);
           if (normalSpeed > 0) {
             maxImpactSpeed = max(maxImpactSpeed, normalSpeed);

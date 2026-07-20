@@ -198,7 +198,30 @@ void main() {
             seed: seed,
           );
 
-          _advanceInFrames(simulation, simulation.durationSeconds);
+          var target = simulation.timelineSeconds;
+          Offset? preFinalWinnerPosition;
+          while (target < simulation.durationSeconds) {
+            final nextTarget = math.min(
+              target + 1 / 60,
+              simulation.durationSeconds,
+            );
+            final isFinalFrame = nextTarget >= simulation.durationSeconds;
+            target = nextTarget;
+            simulation.advanceTo(target);
+            if (!isFinalFrame) {
+              preFinalWinnerPosition = simulation.renderPositions[winnerIndex];
+            }
+          }
+
+          // The end-of-timeline seat guarantee must be a safety net for
+          // resume jumps, not part of normal playback.
+          expect(
+            (preFinalWinnerPosition! - const Offset(0, 209)).distance,
+            lessThanOrEqualTo(24),
+            reason:
+                'winner $personCount/$seed was not physically seated before '
+                'the final frame',
+          );
 
           expect(simulation.phase, WhoPaysLotteryPhase.seated);
           expect(simulation.gateProgress, 0);
@@ -260,6 +283,80 @@ void main() {
       expect(simulation.gateProgress, 0);
       expect(simulation.renderPositions[1], const Offset(0, 209));
       expect(simulation.contentOpacity, 1);
+    });
+
+    test('funnel half-width narrows monotonically to the tube', () {
+      expect(
+        WhoPaysLotterySimulation.funnelHalfWidthAt(90),
+        WhoPaysLotterySimulation.funnelTopHalfWidth,
+      );
+      expect(
+        WhoPaysLotterySimulation.funnelHalfWidthAt(140),
+        WhoPaysLotterySimulation.tubeHalfWidth,
+      );
+      var previous = WhoPaysLotterySimulation.funnelHalfWidthAt(100);
+      for (var dy = 101.0; dy <= 133.0; dy += 1.0) {
+        final current = WhoPaysLotterySimulation.funnelHalfWidthAt(dy);
+        expect(current, lessThanOrEqualTo(previous));
+        previous = current;
+      }
+    });
+
+    for (final seed in const <int>[3, 811, 42424]) {
+      test('no ball teleports at 60 fps playback (seed $seed)', () {
+        final simulation = WhoPaysLotterySimulation(
+          personCount: 6,
+          winnerIndex: seed % 6,
+          seed: seed,
+        );
+
+        var previous = List<Offset>.from(simulation.renderPositions);
+        var target = 0.0;
+        while (target < simulation.durationSeconds) {
+          target = math.min(target + 1 / 60, simulation.durationSeconds);
+          simulation.advanceTo(target);
+          // Rotor-active phases: a full-speed blade strike can legitimately
+          // move a ball ~25 px in one frame — not a teleport. After the rotor
+          // stops (settling onward: capture, funnel, drop), constraint
+          // projection is the only jump source, so the tight bound applies.
+          final bound =
+              target < simulation.settlingEndSeconds ? 32.0 : 24.0;
+          for (var index = 0; index < simulation.personCount; index++) {
+            final jump =
+                (simulation.renderPositions[index] - previous[index]).distance;
+            expect(
+              jump,
+              lessThanOrEqualTo(bound),
+              reason: 'ball $index jumped ${jump.toStringAsFixed(1)} px '
+                  'at ${target.toStringAsFixed(2)} s',
+            );
+          }
+          previous = List<Offset>.from(simulation.renderPositions);
+        }
+      });
+    }
+
+    test('the winner respects the funnel walls on the way down', () {
+      final simulation = WhoPaysLotterySimulation(
+        personCount: 6,
+        winnerIndex: 5,
+        seed: 606,
+      );
+
+      var target = 0.0;
+      while (target < simulation.durationSeconds) {
+        target = math.min(target + 1 / 120, simulation.durationSeconds);
+        simulation.advanceTo(target);
+        final winner = simulation.renderPositions[5];
+        if (winner.dy >= WhoPaysLotterySimulation.tubeEntryY) {
+          expect(
+            winner.dx.abs(),
+            lessThanOrEqualTo(
+              WhoPaysLotterySimulation.funnelHalfWidthAt(winner.dy) + 0.5,
+            ),
+          );
+        }
+      }
     });
   });
 }
