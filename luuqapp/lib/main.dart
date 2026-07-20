@@ -13750,7 +13750,11 @@ class _UpdateDialogState extends State<_UpdateDialog>
         _changeState(UpdateState.failed);
       }
       AnalyticsService.instance.trackEvent(
-        AnalyticsEvent(eventType: 'update_download_failed', screen: 'home'),
+        AnalyticsEvent(
+          eventType: 'update_download_failed',
+          screen: 'home',
+          metadata: {'kind': 'timeout', 'phase': error.phase.name},
+        ),
       );
     } on ApkDownloadSizeException {
       if (mounted) {
@@ -13763,21 +13767,58 @@ class _UpdateDialogState extends State<_UpdateDialog>
         _changeState(UpdateState.failed);
       }
       AnalyticsService.instance.trackEvent(
-        AnalyticsEvent(eventType: 'update_download_failed', screen: 'home'),
+        AnalyticsEvent(
+          eventType: 'update_download_failed',
+          screen: 'home',
+          metadata: {'kind': 'size_limit'},
+        ),
       );
     } catch (e) {
+      final failureKind = classifyApkDownloadFailure(e);
+      final errorText = e.toString();
       if (mounted) {
-        setState(() {
-          _error = tr(
+        final summary = switch (failureKind) {
+          ApkDownloadFailureKind.storage => tr(
+            'Güncelleme cihaza kaydedilemedi. Cihazın depolama alanını kontrol edin.',
+            'The update could not be saved to the device. Check the device storage.',
+          ),
+          ApkDownloadFailureKind.network => tr(
+            'Güncelleme sunucusuna bağlanılamadı. Cihazın internet bağlantısını kontrol edin.',
+            'Could not connect to the update server. Check the device internet connection.',
+          ),
+          ApkDownloadFailureKind.badUrlOrResponse => tr(
+            'Güncelleme adresi geçersiz veya sunucu beklenmedik yanıt verdi. Panel sürüm kaydını kontrol edin.',
+            'The update address is invalid or the server responded unexpectedly. Check the release entry in the panel.',
+          ),
+          ApkDownloadFailureKind.unknown => tr(
             'Güncelleme indirilemedi. Lütfen tekrar deneyin.',
             'The update could not be downloaded. Please try again.',
-          );
+          ),
+        };
+        // Bu diyalog PIN korumalı admin akışında açılır; teknik detay
+        // sahadaki teşhis için bilinçli olarak gösterilir.
+        final trimmedDetail = errorText.length > 300
+            ? '${errorText.substring(0, 300)}…'
+            : errorText;
+        setState(() {
+          _error =
+              '$summary\n\n'
+              '${tr('Teknik detay', 'Technical detail')}: $trimmedDetail';
         });
         _changeState(UpdateState.failed);
       }
       debugPrint('[UPDATE] APK download/verification failed: $e');
       AnalyticsService.instance.trackEvent(
-        AnalyticsEvent(eventType: 'update_download_failed', screen: 'home'),
+        AnalyticsEvent(
+          eventType: 'update_download_failed',
+          screen: 'home',
+          metadata: {
+            'kind': failureKind.name,
+            'error': errorText.length > 500
+                ? errorText.substring(0, 500)
+                : errorText,
+          },
+        ),
       );
     } finally {
       if (identical(_downloadCancellationToken, cancellationToken)) {
