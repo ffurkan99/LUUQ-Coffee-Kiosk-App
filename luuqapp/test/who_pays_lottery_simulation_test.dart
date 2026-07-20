@@ -358,6 +358,52 @@ void main() {
         }
       }
     });
+
+    test('a resume jump leaves no loser suspended mid-air', () {
+      final simulation = WhoPaysLotterySimulation(
+        personCount: 6,
+        winnerIndex: 2,
+        seed: 8080,
+      );
+
+      _advanceInFrames(simulation, 1.2); // karışımın ortası
+      simulation.advanceTo(simulation.durationSeconds); // arka plan sıçraması
+
+      expect(simulation.phase, WhoPaysLotteryPhase.seated);
+      expect(simulation.gateProgress, 0);
+      expect(simulation.renderPositions[2], const Offset(0, 209));
+      for (var index = 0; index < simulation.personCount; index++) {
+        if (index == 2) continue;
+        final position = simulation.renderPositions[index];
+        expect(
+          position.distance,
+          closeTo(WhoPaysLotterySimulation.maxBallCenterRadius, 0.001),
+          reason: 'loser $index is not resting on the floor arc',
+        );
+        expect(position.dy, greaterThan(30));
+        expect(simulation.balls[index].velocity, Offset.zero);
+      }
+    });
+
+    test('continuous playback does not snap losers on the final frame', () {
+      final simulation = WhoPaysLotterySimulation(
+        personCount: 6,
+        winnerIndex: 0,
+        seed: 121212,
+      );
+
+      _advanceInFrames(simulation, simulation.durationSeconds - 1 / 60);
+      final before = List<Offset>.from(simulation.renderPositions);
+      simulation.advanceTo(simulation.durationSeconds);
+
+      for (var index = 1; index < simulation.personCount; index++) {
+        expect(
+          (simulation.renderPositions[index] - before[index]).distance,
+          lessThanOrEqualTo(24),
+          reason: 'loser $index snapped on the final frame',
+        );
+      }
+    });
   });
 }
 

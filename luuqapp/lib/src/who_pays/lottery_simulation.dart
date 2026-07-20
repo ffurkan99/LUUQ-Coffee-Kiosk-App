@@ -127,6 +127,17 @@ class WhoPaysLotterySimulation {
   static const double tubeHalfWidth = 4.0;
   static const double winnerSeatY = 209.0;
 
+  /// Resting slot angles on the floor arc (radians, π/2 = bottom center).
+  /// 0.42 rad ≈ 45 px of arc at r=107, wider than a 42 px ball, so relocated
+  /// balls can never overlap each other.
+  static const List<double> floorSlotAngles = <double>[
+    pi / 2,
+    pi / 2 + 0.42,
+    pi / 2 - 0.42,
+    pi / 2 + 0.84,
+    pi / 2 - 0.84,
+  ];
+
   final int personCount;
   final int winnerIndex;
   final int seed;
@@ -236,6 +247,9 @@ class WhoPaysLotterySimulation {
       balls[winnerIndex]
         ..position = const Offset(0, winnerSeatY)
         ..velocity = Offset.zero;
+      if (droppedCatchUp) {
+        _settleLosersToFloor();
+      }
     }
 
     _updatePresentation();
@@ -639,6 +653,35 @@ class WhoPaysLotterySimulation {
     renderPositions
       ..clear()
       ..addAll(balls.map((ball) => ball.position));
+  }
+
+  /// Deterministically parks every loser on the floor arc. Used only when the
+  /// timeline finishes via a resume/background jump, so the last frame never
+  /// shows balls frozen mid-air.
+  void _settleLosersToFloor() {
+    final used = List<bool>.filled(floorSlotAngles.length, false);
+    for (var index = 0; index < balls.length; index++) {
+      if (index == winnerIndex) continue;
+      final currentAngle = balls[index].position.direction;
+      var best = 0;
+      var bestDifference = double.infinity;
+      for (var slot = 0; slot < floorSlotAngles.length; slot++) {
+        if (used[slot]) continue;
+        final raw = floorSlotAngles[slot] - currentAngle;
+        final difference = atan2(sin(raw), cos(raw)).abs();
+        if (difference < bestDifference) {
+          bestDifference = difference;
+          best = slot;
+        }
+      }
+      used[best] = true;
+      balls[index]
+        ..position = Offset.fromDirection(
+          floorSlotAngles[best],
+          maxBallCenterRadius,
+        )
+        ..velocity = Offset.zero;
+    }
   }
 
   WhoPaysLotteryPhase _phaseFor(double seconds) {
