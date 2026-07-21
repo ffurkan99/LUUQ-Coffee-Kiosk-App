@@ -263,6 +263,48 @@ void main() {
       }
     }
 
+    // Kapak sırtı: hiçbir top deliğin tam üstünde park edip "asıl düşmesi
+    // gereken top" gibi görünemez — kapak açılırken ağız bölgesi kazanan
+    // dışında boş olmalıdır.
+    for (final seed in const <int>[1, 3, 97, 5000, 42424, 977351]) {
+      for (final personCount in const <int>[4, 6]) {
+        test('no loser parks over the gate mouth ($personCount/$seed)', () {
+          final winnerIndex = seed % personCount;
+          final simulation = WhoPaysLotterySimulation(
+            personCount: personCount,
+            winnerIndex: winnerIndex,
+            seed: seed,
+          );
+
+          // "Park" = kutuda 9+ ardışık kare (~0.15 sn) kalmak. Kazananın
+          // buldozeri kaybedeni bir anlığına ağız üstünden süpürebilir —
+          // bu geçiş meşrudur; yasak olan orada DURMAKTIR.
+          var target = 0.0;
+          final windowEnd = simulation.settlingEndSeconds + 0.25;
+          final consecutiveInBox = List<int>.filled(personCount, 0);
+          while (target < windowEnd) {
+            target = math.min(target + 1 / 60, windowEnd);
+            simulation.advanceTo(target);
+            if (target < simulation.settlingEndSeconds) continue;
+            for (var i = 0; i < personCount; i++) {
+              if (i == winnerIndex) continue;
+              final ball = simulation.renderPositions[i];
+              final inBox = ball.dx.abs() <= 24 && ball.dy >= 86;
+              consecutiveInBox[i] = inBox ? consecutiveInBox[i] + 1 : 0;
+              expect(
+                consecutiveInBox[i],
+                lessThan(9),
+                reason:
+                    'loser $i parks over the mouth at '
+                    '${target.toStringAsFixed(2)}s '
+                    '(${ball.dx.toStringAsFixed(0)}, ${ball.dy.toStringAsFixed(0)})',
+              );
+            }
+          }
+        });
+      }
+    }
+
     // Yakalama koreografisi: kazanan top ağza kuş uçuşu süzülmek yerine önce
     // cama yaslanıp fanusun eğrisi boyunca kayarak iner. Bu, topun merkezden
     // (ve duran rotor kanatlarının içinden) kestirme geçmesini yasaklar.

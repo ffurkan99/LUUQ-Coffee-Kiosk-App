@@ -244,3 +244,15 @@ yakalama boyunca hız tavanı (`winnerCaptureMaxSpeed` 540), yuvadan önce
 Rotor yavaşlarken kanadın topa hızlı vurması bilinçli olarak korunur —
 ekranda nedeni görünen meşru fiziktir (ışınlanma-yok testinin rotor-aktif
 32 px sınırı içinde).
+
+Aynı gün, "delik üstünde duran top" tutarsızlığı: kazanan önceden seçili
+olduğundan, kapak açıldığında ağzın tam üstünde dinlenen bir kaybeden
+"asıl düşmesi gereken top" gibi görünüp seçimi saçmalaştırabiliyordu.
+Çözüm nötr bir kapak sırtı: ağız kutusu (|x| < `mouthKeepoutHalfWidth` 34,
+dy > `gateRidgeTopY` 84) karışım sonrası dinlenilemez bölgedir — içine
+oturan top, pass döngüsü İÇİNDE ve adım başına `postMixSeparationCap`
+(5 px) bütçesiyle yana tahliye edilir (tümsekten kayma gibi; kazanan
+yakalamadan itibaren, intake topu prolog boyunca muaftır; karışım öncesi
+herkes eşit — tarafsızlık testli). "Park" tanımı testte kalıcılıktır
+(kutuda ≥9 ardışık kare); kazananın buldozeri kaybedeni bir anlığına ağız
+üstünden süpürebilir — bu geçiş meşru fiziktir.
