@@ -4678,13 +4678,11 @@ class _HesapKimdeDialog extends StatefulWidget {
 class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
   int _personCount = 2;
   int? _result;
-  final _rand = Random();
 
   late List<Color> _playerColors;
   int? _editingPlayerIndex;
 
   bool _isAnimating = false;
-  int _winnerIndex = 0;
 
   @override
   void initState() {
@@ -4705,9 +4703,10 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
 
     unawaited(_LuuqAnalytics.instance.incrementWhoPaysPlays());
 
+    // Kazanan burada seçilmez: fizik, kapak açıldığında ağızdan gerçekten
+    // düşen topu belirler; sonuç onComplete ile simülasyondan gelir.
     setState(() {
       _result = null; // Hide previous result
-      _winnerIndex = _rand.nextInt(_personCount);
       _isAnimating = true;
       _editingPlayerIndex = null;
     });
@@ -4967,13 +4966,12 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
             _LotteryMachine(
               personCount: _personCount,
               playerColors: _playerColors,
-              winnerIndex: _winnerIndex,
               isAnimating: _isAnimating,
               showResult: _result != null,
-              onComplete: () {
+              onComplete: (winner) {
                 if (!mounted) return;
                 setState(() {
-                  _result = _winnerIndex + 1;
+                  _result = winner + 1;
                   _isAnimating = false;
                 });
               },
@@ -5115,15 +5113,15 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
 class _LotteryMachine extends StatefulWidget {
   final int personCount;
   final List<Color> playerColors;
-  final int winnerIndex;
   final bool isAnimating;
   final bool showResult;
-  final VoidCallback onComplete;
+
+  /// Çekiliş bittiğinde fiziğin ağızdan düşürdüğü topun endeksiyle çağrılır.
+  final ValueChanged<int> onComplete;
 
   const _LotteryMachine({
     required this.personCount,
     required this.playerColors,
-    required this.winnerIndex,
     required this.isAnimating,
     required this.showResult,
     required this.onComplete,
@@ -5143,9 +5141,6 @@ class _LotteryMachineState extends State<_LotteryMachine>
   DateTime? _lastImpactSoundAt;
   bool _reduceMotion = false;
 
-  int get _safeWinnerIndex =>
-      widget.winnerIndex.clamp(0, widget.personCount - 1);
-
   @override
   void initState() {
     super.initState();
@@ -5158,7 +5153,13 @@ class _LotteryMachineState extends State<_LotteryMachine>
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
         _spinSound.playResult();
-        widget.onComplete();
+        // Reduced-motion akışında son advanceReducedMotion(1) çağrısı bu
+        // callback'ten önce gelir, dolayısıyla her iki yolda da kazanan
+        // burada çözülmüş durumdadır (seated fazında null yapısal olarak
+        // imkânsız; ?? 0 yalnız savunmadır).
+        final captured = _simulation.capturedBallIndex;
+        assert(captured != null, 'seated draw must have a captured ball');
+        widget.onComplete(captured ?? 0);
       }
     });
   }
@@ -5166,7 +5167,6 @@ class _LotteryMachineState extends State<_LotteryMachine>
   WhoPaysLotterySimulation _createSimulation({required int seed}) {
     return WhoPaysLotterySimulation(
       personCount: widget.personCount,
-      winnerIndex: _safeWinnerIndex,
       seed: seed,
     );
   }
@@ -5218,7 +5218,6 @@ class _LotteryMachineState extends State<_LotteryMachine>
       final previous = _simulation;
       _simulation = WhoPaysLotterySimulation(
         personCount: widget.personCount,
-        winnerIndex: _safeWinnerIndex,
         seed: _seedRandom.nextInt(0x7fffffff),
         initialState:
             previous.personCount == widget.personCount &&
@@ -5249,14 +5248,16 @@ class _LotteryMachineState extends State<_LotteryMachine>
 
   @override
   Widget build(BuildContext context) {
+    final seatedWinner =
+        _simulation.phase == WhoPaysLotteryPhase.seated
+        ? _simulation.capturedBallIndex
+        : null;
     return Semantics(
-      liveRegion:
-          widget.showResult && _simulation.phase == WhoPaysLotteryPhase.seated,
-      label:
-          widget.showResult && _simulation.phase == WhoPaysLotteryPhase.seated
+      liveRegion: widget.showResult && seatedWinner != null,
+      label: widget.showResult && seatedWinner != null
           ? tr(
-              'Kazanan top çıkışta: ${widget.winnerIndex + 1}. kişi',
-              'Winning ball in chute: person ${widget.winnerIndex + 1}',
+              'Kazanan top çıkışta: ${seatedWinner + 1}. kişi',
+              'Winning ball in chute: person ${seatedWinner + 1}',
             )
           : widget.showResult
           ? tr('Kazanan top hazırlanıyor', 'Preparing winning ball')

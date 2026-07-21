@@ -72,7 +72,6 @@ Future<void> _expectMachineGolden(
 }) async {
   final simulation = WhoPaysLotterySimulation(
     personCount: 6,
-    winnerIndex: 2,
     seed: 20260720,
   );
   _advanceInFrames(simulation, seconds);

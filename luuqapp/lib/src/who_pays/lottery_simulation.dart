@@ -43,8 +43,6 @@ class WhoPaysLotterySimulation {
     required this.personCount,
     required this.seed,
     WhoPaysInitialState? initialState,
-    @Deprecated('Physics decides the winner; this argument is ignored.')
-    int? winnerIndex,
   }) : assert(personCount >= 2 && personCount <= 6),
        assert(
          initialState == null ||
