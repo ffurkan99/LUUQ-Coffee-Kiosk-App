@@ -2,7 +2,7 @@ name: luuqapp
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.1.0+13
+version: 1.1.0+20
 
 environment:
   sdk: ^3.11.5
