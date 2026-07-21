@@ -63,6 +63,17 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('KARIŞTIR & ÇEK!'), findsOneWidget);
 
+    // Dokunma geri bildirimi standardı: diyalogdaki basılabilir öğeler
+    // (kişi sayısı çipleri, oyuncu kartları, ana buton, Kapat) BouncyButton
+    // ile sarılı olmalı.
+    expect(
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.byType(BouncyButton),
+      ),
+      findsAtLeastNWidgets(8),
+    );
+
     await tester.tap(find.text('KARIŞTIR & ÇEK!'));
     await tester.pump();
     expect(find.text('KARILIYOR...'), findsOneWidget);

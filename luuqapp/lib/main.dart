@@ -3059,7 +3059,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                 physics: const NeverScrollableScrollPhysics(),
                 children: DrinkMood.values.map((mood) {
                   final isSelected = _selectedMood == mood;
-                  return GestureDetector(
+                  return BouncyButton(
                     onTap: () => _toggleMood(mood),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
@@ -4191,7 +4191,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
             ),
           ),
           SizedBox(height: isCompact ? 16 : 14),
-          GestureDetector(
+          BouncyButton(
             onTap: () async {
               if (!currentFeatureFlags.whoPays) {
                 showFeatureLockedDialog(context, tr('Hesap Kimde', 'Who Pays'));
@@ -4237,7 +4237,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     );
 
     if (!currentFeatureFlags.whoPays) {
-      return GestureDetector(
+      return BouncyButton(
         onTap: () =>
             showFeatureLockedDialog(context, tr('Hesap Kimde', 'Who Pays')),
         child: Stack(
@@ -4777,7 +4777,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                   button: true,
                   selected: selected,
                   label: tr('$count kişi', '$count people'),
-                  child: GestureDetector(
+                  child: BouncyButton(
                     onTap: _isAnimating
                         ? null
                         : () {
@@ -4834,7 +4834,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                     '${index + 1}. kişinin rengini değiştir',
                     'Change color for person ${index + 1}',
                   ),
-                  child: GestureDetector(
+                  child: BouncyButton(
                     onTap: _isAnimating
                         ? null
                         : () {
@@ -4913,7 +4913,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                       button: true,
                       selected: isSelected,
                       label: tr('Oyuncu rengi', 'Player color'),
-                      child: GestureDetector(
+                      child: BouncyButton(
                         onTap: _isAnimating
                             ? null
                             : () => _selectPlayerColor(
@@ -5007,16 +5007,22 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        GestureDetector(
+                        const SizedBox(height: 8),
+                        BouncyButton(
                           onTap: _spin,
-                          child: Text(
-                            tr('Tekrar Çek', 'Draw Again'),
-                            style: TextStyle(
-                              color: _mint,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            child: Text(
+                              tr('Tekrar Çek', 'Draw Again'),
+                              style: TextStyle(
+                                color: _mint,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1,
+                              ),
                             ),
                           ),
                         ),
@@ -5030,7 +5036,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                         'Topları karıştır ve sonucu seç',
                         'Mix balls and draw',
                       ),
-                      child: GestureDetector(
+                      child: BouncyButton(
                         onTap: _isAnimating ? null : _spin,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -5065,17 +5071,23 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                       ),
                     ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
 
             // Close button
-            GestureDetector(
+            BouncyButton(
               onTap: () => Navigator.of(context).pop(),
-              child: Text(
-                tr('Kapat', 'Close'),
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                child: Text(
+                  tr('Kapat', 'Close'),
+                  style: TextStyle(
+                    color: _muted,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
@@ -6897,7 +6909,7 @@ class _MenuDialogState extends State<_MenuDialog> {
             ),
           ),
           // Close button
-          GestureDetector(
+          BouncyButton(
             onTap: () => Navigator.of(context).pop(),
             child: Container(
               width: 52,
@@ -6952,7 +6964,7 @@ class _MenuDialogState extends State<_MenuDialog> {
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8.0),
-                child: GestureDetector(
+                child: BouncyButton(
                   onTap: () {
                     setState(() {
                       _selectedCategory = category;
@@ -7120,15 +7132,18 @@ class _MenuDialogState extends State<_MenuDialog> {
                       ),
                     ),
                     suffixIcon: _searchQuery.isNotEmpty
-                        ? GestureDetector(
+                        ? BouncyButton(
                             onTap: () => setState(() {
                               _searchQuery = '';
                               _searchController.clear();
                             }),
-                            child: const Icon(
-                              Icons.close_rounded,
-                              color: Colors.white54,
-                              size: 22,
+                            child: const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: Icon(
+                                Icons.close_rounded,
+                                color: Colors.white54,
+                                size: 22,
+                              ),
                             ),
                           )
                         : null,
