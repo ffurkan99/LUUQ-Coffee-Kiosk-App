@@ -136,11 +136,17 @@ class WhoPaysLotterySimulation {
   // fighting heavy viscous damping. Losers keep settleDragRate.
   static const double capturedTransitDragRate = 0.6;
 
-  // Tube mouth reference point and the last-resort guarantee spring.
+  // Tube mouth reference point and the last-resort guarantee forces. The
+  // transit is wall-hugging: a radial spring holds the ball against the
+  // glass while a tangential sweep carries it along the curve to the mouth
+  // (no straight-line cut through the chamber); a direct spring takes over
+  // near the mouth.
   static const Offset mouthTarget = Offset(0, 126);
   static const double suctionSpringRate = 90.0;
   static const double suctionDampingRate = 2.5;
   static const double suctionGuaranteeMax = 8000.0;
+  static const double transitNearMouthAngle = 0.45;
+  static const double transitSweepStrength = 4200.0;
 
   /// Nötr drenaj: kapak açıkken ve henüz atama yokken TÜM toplara eşit,
   /// ağza yönlü, rampalanan kuvvet. Ağzın üstü boşsa yığını ağza kaydırır —
@@ -584,11 +590,13 @@ class WhoPaysLotterySimulation {
             : tubeDragRate;
         targetedForceApplications++;
       } else {
-        // Çökme fazında iniş yardımı: toplar kapak açılmadan tabana insin
-        // diye yerçekimi geçici olarak güçlenir (tüm toplara eşit —
-        // tarafsızlık bozulmaz).
+        // İniş yardımı: toplar kapak açılmadan (ve atama gerçekleşene dek)
+        // tabana insin diye yerçekimi geçici olarak güçlenir. Tüm toplara
+        // eşit — tarafsızlık bozulmaz. Az toplu çekilişlerde karışım sonu
+        // yüksekte kalan toplar başka türlü kapak penceresine yetişemiyor.
         final inSettleWindow =
-            drawTime >= _mixingEnd && drawTime < _settlingEnd;
+            drawTime >= _mixingEnd &&
+            (drawTime < _settlingEnd || _capturedBallIndex == null);
         // Yakalanan top tüpe geçtikten sonra kaybedenler de aynı yardımla
         // tabana iner — son kare donmadan önce havada top kalmasın.
         final loserHomeStretch =
@@ -615,18 +623,44 @@ class WhoPaysLotterySimulation {
           final toMouth = mouthTarget - ball.position;
           final distance = toMouth.distance;
           if (distance > 1) {
-            acceleration += toMouth / distance * (drainRampMax * ramp);
+            // Taban güç: drenaj sıfırdan değil %30 güçten başlar ki kapak
+            // açılır açılmaz yığın ağza yönelsin.
+            acceleration += toMouth / distance * (drainRampMax * (0.3 + 0.7 * ramp));
           }
         }
 
         if (isCaptured) {
-          // Son-çare transiti: atanmış top henüz tüpte değil — garanti yayı
-          // onu ağza taşır. (Doğal yakalamada top atandığı anda zaten huni
-          // bandındadır; bu dal yalnız son-çare atamasında çalışır.)
+          // Son-çare transiti: atanmış top henüz tüpte değil. (Doğal
+          // yakalamada top atandığı anda zaten huni bandındadır; bu dal
+          // yalnız son-çare atamasında çalışır.) Ağza uzaksa top düz hattan
+          // çekilmez: radyal yay cama yaslar, teğetsel süpürme cam boyunca
+          // ağza taşır — kenardan kayarak iniş. Ağza yakınken huniye
+          // bırakan düz yay devralır.
           dragRate = capturedTransitDragRate;
-          final pull =
-              (mouthTarget - ball.position) * suctionSpringRate -
-              ball.velocity * suctionDampingRate;
+          final position = ball.position;
+          // Ağza olan açısal fark (−π..π]'ye sarılı; sarım olmadan sol
+          // duvarda işaret dönüp topu ±π noktasında hapsedebilirdi.
+          final rawDelta = pi / 2 - position.direction;
+          final angleToMouth = atan2(sin(rawDelta), cos(rawDelta));
+
+          Offset pull;
+          if (angleToMouth.abs() <= transitNearMouthAngle) {
+            pull =
+                (mouthTarget - position) * suctionSpringRate -
+                ball.velocity * suctionDampingRate;
+          } else {
+            final distance = position.distance;
+            final radial = distance > 1
+                ? position / distance
+                : const Offset(0, 1);
+            final wallSpring =
+                radial * ((maxBallCenterRadius - distance) * suctionSpringRate);
+            final sweep =
+                Offset(-radial.dy, radial.dx) *
+                angleToMouth.sign *
+                transitSweepStrength;
+            pull = wallSpring + sweep - ball.velocity * suctionDampingRate;
+          }
           acceleration += _clampMagnitude(pull, suctionGuaranteeMax);
           targetedForceApplications++;
         } else if (_capturedBallIndex != null &&

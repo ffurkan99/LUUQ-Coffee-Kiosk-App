@@ -166,3 +166,20 @@ Enstrümante tarama (600 taze çekiliş × {2,3,4,6} kişi + 300 redraw × {2,6}
   kişi sayısıyla ters orantılı: n=2 %46, n=3 %29, n=4 %18, n=6 %6 (redraw
   n=2 %81). Az topta çökme yetersiz — kapak açıldığında toplar hâlâ yüksekte.
   Kalite geçişinin (Task 4) ana hedefi.
+
+## Addendum (2026-07-22): Kalite geçişi sonuçları
+
+120 koşuluk kalite taraması (40 seed × {2,4,6}):
+
+- Kapak-top kesmesi 0, ikinci tüp girişi 0, merkezden kesme 0, duraksama 0.
+- Konma hızı p50=210 / p90=235 / max=253 px/s (yumuşak iniş korundu).
+- Oturma zamanı p50=3.15 / p90=3.32 sn.
+- Ayarlar: çökme yerçekimi yardımı atamaya dek sürer; nötr drenaj %30 taban
+  güçle başlar; son-çare transiti düz yay yerine duvar-sarmal rota kullanır
+  (radyal yay + teğetsel süpürme, transitNearMouthAngle=0.45,
+  transitSweepStrength=4200) — top merkezden kestirme geçemez.
+- Bilinçli kabul: az toplu çekilişlerde (n=2 ~%45, n=3 ~%28) atama son-çare
+  bölgesine sarkar — karışım sonu yüksekte kalan toplar 0.35 sn'de tabana
+  fiziksel olarak inemez; faz süreleri spec ile sabit. Görsel maliyeti yok:
+  seçilen top yine ağza en yakın olandır ve camdan kayarak iner
+  (merkezden kesme 0/120 ile doğrulandı).
