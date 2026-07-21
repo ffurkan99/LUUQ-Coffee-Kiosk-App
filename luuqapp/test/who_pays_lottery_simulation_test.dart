@@ -629,6 +629,44 @@ void main() {
       expect(second.renderPositions[captured!], const Offset(0, 209));
     });
 
+    // Adalet: kazanan artık seed + kaotik karışımın fonksiyonu. Sabit seed
+    // listesiyle deterministik; bant gevşektir (gerçek tekdüzelikte ~4σ) ki
+    // test flaky olmasın. 2026-07-22 taraması (600×{2,3,4,6}): tüm paylar
+    // 1/n'in 0.85-1.13 katı bandındaydı.
+    test('capture outcomes are distributed fairly across players', () {
+      for (final personCount in [2, 6]) {
+        final wins = List<int>.filled(personCount, 0);
+        for (var seed = 1; seed <= 240; seed++) {
+          final simulation = WhoPaysLotterySimulation(
+            personCount: personCount,
+            seed: seed,
+          );
+          var target = 0.0;
+          while (target < simulation.durationSeconds - 1e-9) {
+            target = math.min(
+              target + 1 / 60,
+              simulation.durationSeconds,
+            );
+            simulation.advanceTo(target);
+          }
+          wins[simulation.capturedBallIndex!]++;
+        }
+        final expected = 240 / personCount;
+        for (var index = 0; index < personCount; index++) {
+          expect(
+            wins[index],
+            greaterThan((expected * 0.45).floor()),
+            reason: 'player $index wins too rarely for n=$personCount: $wins',
+          );
+          expect(
+            wins[index],
+            lessThan((expected * 1.75).ceil()),
+            reason: 'player $index wins too often for n=$personCount: $wins',
+          );
+        }
+      }
+    }, timeout: const Timeout(Duration(minutes: 5)));
+
     test('reduced motion honours the initial state', () {
       final first = WhoPaysLotterySimulation(personCount: 4, seed: 12321);
       _advanceInFrames(first, first.durationSeconds);
