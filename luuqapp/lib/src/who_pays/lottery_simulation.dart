@@ -149,6 +149,23 @@ class WhoPaysLotterySimulation {
   /// üstü kırpılır ki itilen toplar duvara fırlamasın.
   static const double plowKickCap = 320.0;
 
+  /// Karışım sonrası düşey terminal hız (px/s). Fanus yüksekliğinden serbest
+  /// düşüş ~494 px/s üretir; üstü "roket düşüş" gibi okunur.
+  static const double postMixTerminalFallSpeed = 560.0;
+
+  /// Kazananın yakalama/iniş boyunca sinematik hız tavanı (px/s).
+  static const double winnerCaptureMaxSpeed = 540.0;
+
+  /// Yuvadan önce ağır sönümleme uygulanan bant (px) ve sönümleme oranı —
+  /// yumuşak konma için.
+  static const double seatCushionZone = 40.0;
+  static const double seatCushionDragRate = 12.0;
+
+  /// Karışım sonrası çakışma ayrıştırmasının kare başına konum itmesi
+  /// tavanı (px) — derin binmelerde tek karelik "zıplama" görüntüsünü
+  /// birkaç kareye yayar.
+  static const double postMixSeparationCap = 5.0;
+
   static const int rotorBladeCount = 3;
   static const double rotorHubRadius = 15.0;
   static const double rotorBladeInnerRadius = 15.0;
@@ -464,7 +481,12 @@ class WhoPaysLotterySimulation {
           2600,
         );
         acceleration = centering + const Offset(0, chuteGravity);
-        dragRate = tubeDragRate;
+        // İniş yastığı: yuvanın son bandında ağır sönümleme — top ~550 px/s
+        // ile çakılıp tek karede durmak yerine yavaşlayıp yumuşak konar
+        // (sekme yok, iniş monotonluğu korunur).
+        dragRate = ball.position.dy >= winnerSeatY - seatCushionZone
+            ? seatCushionDragRate
+            : tubeDragRate;
       } else {
         // Çökme fazında iniş yardımı: toplar kapak açılmadan tabana insin
         // diye yerçekimi geçici olarak güçlenir (tüm toplara eşit — kazanan
@@ -582,10 +604,25 @@ class WhoPaysLotterySimulation {
       maxImpactSpeed = max(maxImpactSpeed, _resolveBoundaries(drawTime));
     }
 
-    for (final ball in balls) {
+    final postMix = drawTime >= _mixingEnd;
+    for (var index = 0; index < balls.length; index++) {
+      final ball = balls[index];
       final speed = ball.velocity.distance;
       if (speed > maxBallSpeed) {
         ball.velocity = ball.velocity / speed * maxBallSpeed;
+      }
+      // Karışım bittikten sonra sunum sakinleşir: düşüşler serbest düşüş
+      // tavanını aşamaz (tüm toplara eşit — tarafsızlık korunur) ve kazanan
+      // yakalama boyunca sinematik hız tavanına uyar. Roket düşüş /
+      // fırlamış kayış görüntüsünün önüne geçer.
+      if (postMix && ball.velocity.dy > postMixTerminalFallSpeed) {
+        ball.velocity = Offset(ball.velocity.dx, postMixTerminalFallSpeed);
+      }
+      if (index == winnerIndex && drawTime >= _settlingEnd) {
+        final winnerSpeed = ball.velocity.distance;
+        if (winnerSpeed > winnerCaptureMaxSpeed) {
+          ball.velocity = ball.velocity / winnerSpeed * winnerCaptureMaxSpeed;
+        }
       }
     }
     return maxImpactSpeed;
@@ -622,13 +659,26 @@ class WhoPaysLotterySimulation {
         final secondIsCaptureWinner =
             secondIndex == winnerIndex && drawTime >= _settlingEnd;
 
+        // Karışım sonrası ayrıştırma itmesi kare başına sınırlanır: derin
+        // binmelerde topu tek karede fırlatmak yerine birkaç kareye yayar
+        // (collisionPasses döngüsü toplam ayrışmayı yine tamamlar).
+        final postMixCollision = drawTime >= _mixingEnd;
+        final fullPush = overlap;
+        final halfPush = overlap * 0.5;
+        final cappedFull = postMixCollision
+            ? min(fullPush, postMixSeparationCap)
+            : fullPush;
+        final cappedHalf = postMixCollision
+            ? min(halfPush, postMixSeparationCap)
+            : halfPush;
+
         if (firstIsCaptureWinner) {
-          second.position += normal * overlap;
+          second.position += normal * cappedFull;
         } else if (secondIsCaptureWinner) {
-          first.position -= normal * overlap;
+          first.position -= normal * cappedFull;
         } else {
-          first.position -= normal * (overlap * 0.5);
-          second.position += normal * (overlap * 0.5);
+          first.position -= normal * cappedHalf;
+          second.position += normal * cappedHalf;
         }
 
         final relativeVelocity = second.velocity - first.velocity;
@@ -688,7 +738,13 @@ class WhoPaysLotterySimulation {
       final contact = _deepestRotorContact(ball.position, angle, ballIndex);
       if (contact == null) continue;
 
-      ball.position += contact.normal * (contact.penetration + 0.05);
+      // Karışım sonrası (rotor yavaşlarken) kanat penetrasyon itmesi de kare
+      // başına sınırlanır — yavaşlayan kanadın topu tek karede savurması
+      // "ani düşme/itilme" olarak görünüyordu.
+      final rotorPush = drawTime >= _mixingEnd
+          ? min(contact.penetration, postMixSeparationCap)
+          : contact.penetration;
+      ball.position += contact.normal * (rotorPush + 0.05);
       final surfaceVelocity = Offset(
         -contact.point.dy * angularVelocity,
         contact.point.dx * angularVelocity,
