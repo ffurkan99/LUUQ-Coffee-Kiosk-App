@@ -131,7 +131,7 @@ void showFeatureLockedDialog(
               Text(
                 description,
                 style: const TextStyle(
-                  color: _muted,
+                  color: _mutedText,
                   fontSize: 14,
                   height: 1.4,
                 ),
@@ -284,6 +284,17 @@ const _caramel = Color(
 const _mint = Color(0xFF48C9B0);
 const _cream = Color(0xFFFFF7EC);
 const _muted = Color(0xFF8A8694);
+
+/// Soluk METİN rengi — _muted'ın okunabilir tonu (koyu zeminlerde ~6:1
+/// kontrast). Kural: metin renginde _muted kullanılmaz; _muted yalnız
+/// ikon/çizgi soldurma içindir. (docs/ui-audit-2026-07-21.md D2)
+const _mutedText = Color(0xFFA29DB0);
+
+/// Kiosk tip ölçeği tabanları: rozet/etiket 12, ikincil metin (caption) 14.
+/// Kural: gövde metni 14'ün, rozet 12'nin altına inemez.
+/// (docs/ui-audit-2026-07-21.md D1)
+const double _fsBadge = 12;
+const double _fsCaption = 14;
 
 const _preferredMenuNames = <String, List<String>>{
   'Double Espresso': ['Espresso Double'],
@@ -2059,7 +2070,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                       '${tr('Deneme Sürümü', 'Trial Version')} (${getTrialRemainingText()})',
                                                       style: const TextStyle(
                                                         color: _cream,
-                                                        fontSize: 13,
+                                                        fontSize: _fsCaption,
                                                         fontWeight:
                                                             FontWeight.w900,
                                                       ),
@@ -2091,7 +2102,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                           style:
                                                               const TextStyle(
                                                                 color: _bgDark,
-                                                                fontSize: 11,
+                                                                fontSize:
+                                                                    _fsBadge,
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .w900,
@@ -2290,7 +2302,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
               tr('BAĞLANTILARIMIZ', 'OUR CONNECTIONS'),
               style: TextStyle(
                 color: _gold,
-                fontSize: 13,
+                fontSize: _fsCaption,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 3,
               ),
@@ -2363,7 +2375,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
             maxLines: 1,
             style: const TextStyle(
               color: _cream,
-              fontSize: 11,
+              fontSize: _fsBadge,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.8,
             ),
@@ -2504,14 +2516,14 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
               ),
               content: const Text(
                 'Ekran temizleme modunu başlatmak istediğinize emin misiniz? 30 saniye boyunca dokunmatik kilitlenecektir.',
-                style: TextStyle(color: _muted),
+                style: TextStyle(color: _mutedText),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
                   child: Text(
                     tr('Hayır', 'No'),
-                    style: TextStyle(color: _muted),
+                    style: TextStyle(color: _mutedText),
                   ),
                 ),
                 TextButton(
@@ -2592,14 +2604,14 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
               ),
               content: const Text(
                 'Kiosk uygulamasını kapatıp masaüstüne dönmek istediğinize emin misiniz?',
-                style: TextStyle(color: _muted),
+                style: TextStyle(color: _mutedText),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
                   child: Text(
                     tr('Hayır', 'No'),
-                    style: TextStyle(color: _muted),
+                    style: TextStyle(color: _mutedText),
                   ),
                 ),
                 TextButton(
@@ -2976,7 +2988,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: _muted.withValues(alpha: 0.9),
+                color: _mutedText.withValues(alpha: 0.9),
                 fontSize: isCompact ? 13 : 14,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0.5,
@@ -3042,7 +3054,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
             ),
             style: TextStyle(
               fontSize: 18,
-              color: _muted,
+              color: _mutedText,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -3633,7 +3645,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: isCompact ? 12 : 13,
-              color: _muted,
+              color: _mutedText,
               height: 1.4,
               fontWeight: FontWeight.w500,
             ),
@@ -3749,7 +3761,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                         Text(
                           tr('BUGÜNKÜ SEÇİMİN', 'YOUR PICK TODAY'),
                           style: const TextStyle(
-                            fontSize: 10,
+                            fontSize: _fsBadge,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 3,
                             color: _gold,
@@ -3809,7 +3821,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                     menuItem.price,
                                     style: const TextStyle(
                                       color: _gold,
-                                      fontSize: 13,
+                                      fontSize: _fsCaption,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -4186,7 +4198,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
             ),
             style: TextStyle(
               fontSize: isCompact ? 15 : 18,
-              color: _muted,
+              color: _mutedText,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -4573,7 +4585,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                   tr('BÜYÜTMEK İÇİN DOKUNUN', 'TAP TO ENLARGE'),
                   style: const TextStyle(
                     color: _cream,
-                    fontSize: 13,
+                    fontSize: _fsCaption,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.5,
                   ),
@@ -4634,7 +4646,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
               maxLines: 1,
               style: const TextStyle(
                 color: _cream,
-                fontSize: 13,
+                fontSize: _fsCaption,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1,
               ),
@@ -4762,7 +4774,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
               ),
               style: const TextStyle(
                 fontSize: 16,
-                color: _muted,
+                color: _mutedText,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -5084,7 +5096,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                 child: Text(
                   tr('Kapat', 'Close'),
                   style: TextStyle(
-                    color: _muted,
+                    color: _mutedText,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
@@ -6900,7 +6912,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                   ),
                   style: TextStyle(
                     fontSize: 15,
-                    color: _muted,
+                    color: _mutedText,
                     fontWeight: FontWeight.w500,
                     letterSpacing: 1,
                   ),
@@ -7061,7 +7073,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                                 child: Text(
                                   tr('$itemCount Ürün', '$itemCount Items'),
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: _fsBadge,
                                     color: isSelected
                                         ? _gold
                                         : Colors.white.withValues(alpha: 0.7),
@@ -7271,7 +7283,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                 child: Text(
                   tr('${items.length} Ürün', '${items.length} Items'),
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: _fsCaption,
                     fontWeight: FontWeight.w700,
                     color: Colors.white70,
                   ),
@@ -7304,7 +7316,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                   Text(
                     tr('Popüler Favoriler: ', 'Popular Favorites: '),
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: _fsCaption,
                       fontWeight: FontWeight.w900,
                       color: _gold,
                     ),
@@ -7313,7 +7325,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                     child: Text(
                       populars,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: _fsCaption,
                         fontWeight: FontWeight.w800,
                         color: _cream,
                       ),
@@ -7352,7 +7364,7 @@ class _MenuDialogState extends State<_MenuDialog> {
           child: Text(
             tr('${items.length} Bulundu', '${items.length} Found'),
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: _fsCaption,
               fontWeight: FontWeight.w700,
               color: _gold,
             ),
@@ -7509,7 +7521,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                               Text(
                                 isSpecial ? 'Special' : trMenu('Popüler'),
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: _fsBadge,
                                   fontWeight: FontWeight.w900,
                                   color: isSpecial
                                       ? const Color(0xFFE879A8)
@@ -7527,7 +7539,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                     Text(
                       trMenu(item.desc),
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: _fsCaption,
                         color: Colors.white.withValues(alpha: 0.75),
                         height: 1.3,
                       ),
@@ -7561,7 +7573,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                               child: Text(
                                 trMenu(tag),
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: _fsBadge,
                                   fontWeight: FontWeight.w800,
                                   color: color,
                                   letterSpacing: 0.5,
@@ -7646,7 +7658,7 @@ class _MenuDialogState extends State<_MenuDialog> {
             child: Text(
               label,
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: _fsBadge,
                 fontWeight: FontWeight.w900,
                 color: _gold,
               ),
@@ -7712,7 +7724,7 @@ class _ProductDetailDialog extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: _fsBadge,
                 fontWeight: FontWeight.w900,
                 color: _gold,
               ),
@@ -7897,7 +7909,7 @@ class _ProductDetailDialog extends StatelessWidget {
                           child: Text(
                             trMenu(tag),
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: _fsBadge,
                               fontWeight: FontWeight.w800,
                               color: color,
                               letterSpacing: 0.5,
@@ -8312,8 +8324,10 @@ class _AdminPinDialogState extends State<_AdminPinDialog> {
                       ),
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: _errorMessage != null ? Colors.redAccent : _muted,
-                    fontSize: 13,
+                    color: _errorMessage != null
+                        ? Colors.redAccent
+                        : _mutedText,
+                    fontSize: _fsCaption,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -8834,8 +8848,8 @@ class _AdminSectionButton extends StatelessWidget {
                     Text(
                       subtitle,
                       style: const TextStyle(
-                        color: _muted,
-                        fontSize: 13,
+                        color: _mutedText,
+                        fontSize: _fsCaption,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -8996,7 +9010,7 @@ class _WheelContentAdminDialogState extends State<_WheelContentAdminDialog> {
                 'The main wheel consists of 8 products. You can select each slot from the menu.',
               ),
               style: const TextStyle(
-                color: _muted,
+                color: _mutedText,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
@@ -9122,7 +9136,7 @@ class _WheelSlotPicker extends StatelessWidget {
                     label,
                     style: const TextStyle(
                       color: _gold,
-                      fontSize: 12,
+                      fontSize: _fsBadge,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.8,
                     ),
@@ -9190,7 +9204,10 @@ Future<void> _showAdminError(BuildContext context, String message) {
         ),
         content: Text(
           message,
-          style: const TextStyle(color: _muted, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            color: _mutedText,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         actions: [
           TextButton(
@@ -9281,7 +9298,7 @@ class _BaristaAdminDialogState extends State<_BaristaAdminDialog> {
                 'Choose the drink and dessert for barista recommendation.',
               ),
               style: TextStyle(
-                color: _muted,
+                color: _mutedText,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -9386,7 +9403,7 @@ class _AdminPickerField extends StatelessWidget {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: _muted),
+          labelStyle: const TextStyle(color: _mutedText),
           filled: true,
           fillColor: _bgDark.withValues(alpha: 0.55),
           enabledBorder: OutlineInputBorder(
@@ -9537,7 +9554,7 @@ class _AdminSearchPickerDialogState extends State<_AdminSearchPickerDialog> {
               ),
               decoration: InputDecoration(
                 hintText: widget.searchHint,
-                hintStyle: const TextStyle(color: _muted),
+                hintStyle: const TextStyle(color: _mutedText),
                 prefixIcon: const Icon(Icons.search_rounded, color: _gold),
                 suffixIcon: _searchController.text.isEmpty
                     ? null
@@ -9572,7 +9589,7 @@ class _AdminSearchPickerDialogState extends State<_AdminSearchPickerDialog> {
                         child: Text(
                           tr('Sonuç bulunamadı', 'No results found'),
                           style: const TextStyle(
-                            color: _muted,
+                            color: _mutedText,
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
@@ -9610,7 +9627,7 @@ class _AdminSearchPickerDialogState extends State<_AdminSearchPickerDialog> {
                                   trMenu(item.desc),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: _muted),
+                                  style: const TextStyle(color: _mutedText),
                                 ),
                           trailing: isSelected
                               ? const Icon(
@@ -10362,7 +10379,7 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
                     badgeText,
                     style: TextStyle(
                       color: badgeColor,
-                      fontSize: 10,
+                      fontSize: _fsBadge,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1,
                     ),
@@ -10517,7 +10534,7 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: _fsCaption,
                                     color: _cream.withValues(alpha: 0.7),
                                     height: 1.3,
                                   ),
@@ -10593,7 +10610,7 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
                               child: Text(
                                 trMenu(tag),
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: _fsBadge,
                                   fontWeight: FontWeight.w800,
                                   color: color,
                                 ),
@@ -10780,7 +10797,7 @@ class _LanguageSwitcher extends StatelessWidget {
                 Text(
                   'TR',
                   style: TextStyle(
-                    color: isTr ? _gold : _muted,
+                    color: isTr ? _gold : _mutedText,
                     fontWeight: isTr ? FontWeight.bold : FontWeight.normal,
                     fontSize: 16,
                   ),
@@ -10795,7 +10812,7 @@ class _LanguageSwitcher extends StatelessWidget {
                 Text(
                   'EN',
                   style: TextStyle(
-                    color: !isTr ? _gold : _muted,
+                    color: !isTr ? _gold : _mutedText,
                     fontWeight: !isTr ? FontWeight.bold : FontWeight.normal,
                     fontSize: 16,
                   ),
@@ -11089,7 +11106,7 @@ class _AnalyticsAdminDialogState extends State<_AnalyticsAdminDialog> {
           Text(
             title,
             style: const TextStyle(
-              color: _muted,
+              color: _mutedText,
               fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
@@ -11122,14 +11139,14 @@ class _AnalyticsAdminDialogState extends State<_AnalyticsAdminDialog> {
             'Tüm analiz verilerini sıfırlamak istediğinize emin misiniz? Bu işlem geri alınamaz.',
             'Are you sure you want to reset all analytics data? This action cannot be undone.',
           ),
-          style: const TextStyle(color: _muted),
+          style: const TextStyle(color: _mutedText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(
               tr('Hayır', 'No'),
-              style: const TextStyle(color: _muted),
+              style: const TextStyle(color: _mutedText),
             ),
           ),
           TextButton(
@@ -11292,8 +11309,8 @@ class _ThemeSelectionDialogState extends State<_ThemeSelectionDialog> {
                           'Change Kiosk Visual Mode',
                         ),
                         style: const TextStyle(
-                          color: _muted,
-                          fontSize: 13,
+                          color: _mutedText,
+                          fontSize: _fsCaption,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -11483,7 +11500,7 @@ class _ThemeSelectionDialogState extends State<_ThemeSelectionDialog> {
                       tr('Aktif', 'Active'),
                       style: const TextStyle(
                         color: _bgDark,
-                        fontSize: 10,
+                        fontSize: _fsBadge,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -11506,8 +11523,8 @@ class _ThemeSelectionDialogState extends State<_ThemeSelectionDialog> {
                     child: Text(
                       tr('Yakında', 'Soon'),
                       style: TextStyle(
-                        color: _muted.withValues(alpha: 0.8),
-                        fontSize: 10,
+                        color: _mutedText.withValues(alpha: 0.8),
+                        fontSize: _fsBadge,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -11529,8 +11546,8 @@ class _ThemeSelectionDialogState extends State<_ThemeSelectionDialog> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: _muted,
-                fontSize: 11,
+                color: _mutedText,
+                fontSize: _fsCaption,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -11679,8 +11696,8 @@ class _VolumeSelectionDialogState extends State<_VolumeSelectionDialog> {
                           'Change Kiosk Volume Level',
                         ),
                         style: const TextStyle(
-                          color: _muted,
-                          fontSize: 13,
+                          color: _mutedText,
+                          fontSize: _fsCaption,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -11932,7 +11949,7 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
           Text(
             label,
             style: TextStyle(
-              color: isEnabled ? _cream : _muted,
+              color: isEnabled ? _cream : _mutedText,
               fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
@@ -12036,8 +12053,8 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
                             'System Diagnostics & Developer Tab',
                           ),
                           style: const TextStyle(
-                            color: _muted,
-                            fontSize: 13,
+                            color: _mutedText,
+                            fontSize: _fsCaption,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -12090,8 +12107,8 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
                                           Text(
                                             tr('Cihaz UUID', 'Device UUID'),
                                             style: const TextStyle(
-                                              color: _muted,
-                                              fontSize: 13,
+                                              color: _mutedText,
+                                              fontSize: _fsCaption,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -12118,7 +12135,7 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
                                               _deviceId,
                                               style: const TextStyle(
                                                 color: _cream,
-                                                fontSize: 12,
+                                                fontSize: _fsCaption,
                                                 fontWeight: FontWeight.w900,
                                                 fontFamily: 'monospace',
                                                 letterSpacing: 0.5,
@@ -12209,7 +12226,7 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
                                             ),
                                             style: const TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 13,
+                                              fontSize: _fsCaption,
                                             ),
                                           ),
                                           style: ElevatedButton.styleFrom(
@@ -12452,8 +12469,8 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
             child: Text(
               label,
               style: const TextStyle(
-                color: _muted,
-                fontSize: 13,
+                color: _mutedText,
+                fontSize: _fsCaption,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -12462,7 +12479,7 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
             value,
             style: TextStyle(
               color: valueColor ?? _cream,
-              fontSize: 13,
+              fontSize: _fsCaption,
               fontWeight: FontWeight.w900,
               fontFamily: 'monospace',
             ),
@@ -14414,8 +14431,8 @@ class _UpdateDialogState extends State<_UpdateDialog>
                           Text(
                             tr('Mevcut Sürüm', 'Current Version'),
                             style: const TextStyle(
-                              color: _muted,
-                              fontSize: 13,
+                              color: _mutedText,
+                              fontSize: _fsCaption,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -14438,8 +14455,8 @@ class _UpdateDialogState extends State<_UpdateDialog>
                           Text(
                             tr('Yeni Sürüm', 'New Version'),
                             style: const TextStyle(
-                              color: _muted,
-                              fontSize: 13,
+                              color: _mutedText,
+                              fontSize: _fsCaption,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -14462,8 +14479,8 @@ class _UpdateDialogState extends State<_UpdateDialog>
                           Text(
                             tr('Dosya Boyutu', 'File Size'),
                             style: const TextStyle(
-                              color: _muted,
-                              fontSize: 13,
+                              color: _mutedText,
+                              fontSize: _fsCaption,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -14485,8 +14502,8 @@ class _UpdateDialogState extends State<_UpdateDialog>
                 Text(
                   tr('Güncelleme Notları:', 'Release Notes:'),
                   style: const TextStyle(
-                    color: _muted,
-                    fontSize: 13,
+                    color: _mutedText,
+                    fontSize: _fsCaption,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -14532,7 +14549,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
                       _error!,
                       style: const TextStyle(
                         color: Colors.redAccent,
-                        fontSize: 13,
+                        fontSize: _fsCaption,
                         fontWeight: FontWeight.bold,
                       ),
                       textAlign: TextAlign.center,
