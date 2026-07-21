@@ -33,22 +33,25 @@ class WhoPaysStepReport {
 
 /// Package-internal simulation for the Hesap Kimde lottery machine.
 ///
-/// The winner is supplied by the caller. Physics only controls presentation;
-/// it never selects or changes the result. No winner-specific force may run
-/// before the capture phase starts ([winnerGuideApplications] proves it).
+/// Physics-first: the winner is NOT supplied by the caller. When the gate
+/// opens, whichever ball genuinely falls through the mouth becomes
+/// [capturedBallIndex]; the UI reads the result from the simulation. No
+/// index-conditioned force may run before capture assignment
+/// ([targetedForceApplications] proves it).
 class WhoPaysLotterySimulation {
   WhoPaysLotterySimulation({
     required this.personCount,
-    required this.winnerIndex,
     required this.seed,
     WhoPaysInitialState? initialState,
+    @Deprecated('Physics decides the winner; this argument is ignored.')
+    int? winnerIndex,
   }) : assert(personCount >= 2 && personCount <= 6),
-       assert(winnerIndex >= 0 && winnerIndex < personCount),
        assert(
          initialState == null ||
              initialState.chamberPositions.length == personCount,
        ),
        _random = Random(seed),
+       _initialState = initialState,
        _intakeBallIndex = initialState?.seatedBallIndex,
        _phaseShift = initialState?.seatedBallIndex != null
            ? intakeDurationSeconds
@@ -83,16 +86,14 @@ class WhoPaysLotterySimulation {
   static const double _gateCloseStart = 3.10;
   static const double _gateCloseLength = 0.14;
   static const double gateSweepClearY = 158.0;
-  // Son-çare penceresi: duvar-sarmal emiş topu zamanında getiremezse son
-  // 100 ms'de düz yay devreye girer. Ana teslimatçı duvar-sarmal kuvvettir.
+  // Son-çare penceresi: fizik son 100 ms'ye dek hiçbir topu ağızdan
+  // düşürememişse, ağza O ANDA en yakın top atanır ve düz yayla alınır —
+  // kural yine "en yakın kazanır", endeks önseli yoktur.
   static const double _guaranteeWindow = 0.10;
 
   /// Çökme fazında yerçekimi çarpanı — kapak açılmadan topların tabana
   /// inmesine yardım eder (tüm toplara eşit uygulanır).
   static const double settleAssistGravityFactor = 1.3;
-
-  /// Kazananın duvardan ayrılıp huniye yöneldiği açısal eşik (ağza göre).
-  static const double captureNearMouthAngle = 0.45;
 
   static const int idleDurationMilliseconds = 3400;
 
@@ -132,18 +133,25 @@ class WhoPaysLotterySimulation {
   static const double mixingDragRate = 0.22;
   static const double settleDragRate = 2.0;
   static const double tubeDragRate = 0.20;
-  // Winner-only drag while still in the chamber during capture. Lower than
-  // settleDragRate so the suction pull (below) isn't fighting heavy viscous
-  // damping while working the winner around chamber geometry toward the
-  // mouth. Losers keep settleDragRate.
-  static const double winnerCaptureDragRate = 0.6;
+  // Drag on the captured ball while it is still in the chamber (last-resort
+  // transit only). Lower than settleDragRate so the guarantee spring isn't
+  // fighting heavy viscous damping. Losers keep settleDragRate.
+  static const double capturedTransitDragRate = 0.6;
 
-  // Capture suction toward the tube mouth.
+  // Tube mouth reference point and the last-resort guarantee spring.
   static const Offset mouthTarget = Offset(0, 126);
   static const double suctionSpringRate = 90.0;
   static const double suctionDampingRate = 2.5;
-  static const double suctionRampMax = 3200.0;
   static const double suctionGuaranteeMax = 8000.0;
+
+  /// Nötr drenaj: kapak açıkken ve henüz atama yokken TÜM toplara eşit,
+  /// ağza yönlü, rampalanan kuvvet. Ağzın üstü boşsa yığını ağza kaydırır —
+  /// yine deliğe en yakın top düşer (endeks önseli yok).
+  static const double drainRampMax = 900.0;
+
+  /// Ağzın top kabul etmesi için gereken kapak açıklığı. Tam açılmaya yakın
+  /// eşik: top, kapak neredeyse tamamen açılmadan deliğe giremez.
+  static const double gateOpenForCapture = 0.85;
 
   // Outward air cushion that clears losers away from the open mouth.
   static const double cushionRadius = 85.0;
@@ -165,16 +173,11 @@ class WhoPaysLotterySimulation {
   static const double seatCushionZone = 36.0;
   static const double seatCushionDragRate = 11.0;
 
-  /// Kapak sırtı: kapak bölgesi hafif bir tümsek gibi davranır — hiçbir top
-  /// deliğin tam üstünde park edip "asıl düşecek top" görüntüsü veremez.
-  /// Karışım sonrası herkese eşit uygulanır (tarafsızlık korunur); yakalama
-  /// başlayınca kazanan muaf tutulur ki ağza girebilsin.
+  /// Ağız keepout bölgesi: yakalama ATANDIKTAN sonra, kapak anlamlı açıkken
+  /// (ikinci top sızmasın diye) yakalanan dışındaki toplar bu banttan
+  /// geometrik tahliyeyle yana süpürülür. Atama öncesi bölge serbesttir —
+  /// ağzın üstünde top olması artık istenen durumdur.
   static const double gateRidgeTopY = 84.0;
-  static const double gateRidgeHalfWidth = 40.0;
-  static const double gateRidgeStrength = 900.0;
-
-  /// Ağız kutusunun yarı genişliği (px): bu bandın içinde (dy >
-  /// gateRidgeTopY+8) hiçbir top dinlenemez — geometrik tahliye uygulanır.
   static const double mouthKeepoutHalfWidth = 34.0;
 
   /// Karışım sonrası çakışma ayrıştırmasının kare başına konum itmesi
@@ -213,17 +216,31 @@ class WhoPaysLotterySimulation {
   ];
 
   final int personCount;
-  final int winnerIndex;
   final int seed;
   final Random _random;
   final double _phaseShift;
+  final WhoPaysInitialState? _initialState;
   final int? _intakeBallIndex;
   bool _intakeReleased = false;
 
-  // Kazanan huniden tüpe bir kez girdi mi? Girince hava yastığı görevini
-  // tamamlar ve kaybedenler dondurulmadan önce tabana inebilsin diye
-  // iniş yardımı devralır.
-  bool _winnerReachedTube = false;
+  // Fiziğin yakaladığı top. İki yoldan atanır: (a) doğal — kapak açıkken
+  // bir topun merkezi huni bandına girdiği an; (b) son çare — garanti
+  // penceresi dolduğunda ağza en yakın top. Bir kez atanınca değişmez.
+  int? _capturedBallIndex;
+
+  // Reduced-motion gölge çözümünün önbelleği (canlı fizik koşulmadığında
+  // kazanan, aynı seed'li gölge kopyanın sona koşulmasıyla öğrenilir).
+  int? _reducedMotionCaptured;
+
+  /// Fiziğin ağızdan düşürdüğü topun endeksi. Canlı koşumda atama anından
+  /// itibaren, reduced-motion'da gölge çözümden gelir. `phase == seated`
+  /// olan bir çekilişte null olamaz.
+  int? get capturedBallIndex => _capturedBallIndex ?? _reducedMotionCaptured;
+
+  // Yakalanan top huniden tüpe bir kez girdi mi? Girince ağız temizleme
+  // yastığı görevini tamamlar ve kaybedenler dondurulmadan önce tabana
+  // inebilsin diye iniş yardımı devralır.
+  bool _capturedReachedTube = false;
 
   // Kapanışın başladığı mutlak an (sn). Kazanan süpürme bandını geçince
   // (en erken _gateCloseStart'ta) atanır; zaman çizelgesi sonunda hâlâ
@@ -251,10 +268,12 @@ class WhoPaysLotterySimulation {
   /// diagnostics to prove that mixing energy comes from rotor contact.
   int bladeCollisionCount = 0;
 
-  /// Incremented every physics step that applies the capture suction (or its
-  /// end-of-window guarantee) to the winner. Tests assert this stays 0 until
-  /// the capture phase starts.
-  int winnerGuideApplications = 0;
+  /// Incremented every physics step that applies an index-conditioned
+  /// capture force (the captured ball's tube/transit handling). Tests assert
+  /// this stays 0 while [capturedBallIndex] is null — the winner is chosen
+  /// by geometry, never steered by a targeted force. (The redraw intake
+  /// prologue is presentation continuity and does not count.)
+  int targetedForceApplications = 0;
 
   double get durationSeconds => _phaseShift + _idleDuration;
   int get durationMilliseconds =>
@@ -332,21 +351,32 @@ class WhoPaysLotterySimulation {
     }
 
     // Kazanan-farkındalıklı kapanış tetiği: en erken _gateCloseStart'ta VE
-    // kazanan çubuğun süpürme bandını geçtikten sonra.
+    // yakalanan top çubuğun süpürme bandını geçtikten sonra.
+    final captured = _capturedBallIndex;
     if (_gateCloseBeganAt == null &&
         target - _phaseShift >= _gateCloseStart &&
-        balls[winnerIndex].position.dy >= gateSweepClearY) {
+        captured != null &&
+        balls[captured].position.dy >= gateSweepClearY) {
       _gateCloseBeganAt = timelineSeconds;
     }
 
     // A background/resume jump is deliberately not fully simulated. If the
-    // controller has already completed, guarantee a valid in-app result rather
-    // than leaving the selected ball suspended in the glass.
+    // controller has already completed, guarantee a valid in-app result
+    // rather than leaving the draw unresolved: the ball nearest the mouth is
+    // the winner (same closest-wins rule, applied at the freeze frame).
     if (target >= durationSeconds) {
-      balls[winnerIndex]
+      final seatedIndex = _capturedBallIndex ??= _nearestToMouth();
+      balls[seatedIndex]
         ..position = const Offset(0, winnerSeatY)
         ..velocity = Offset.zero;
-      _gateCloseBeganAt ??= timelineSeconds - _gateCloseLength;
+      // Donma karesi kapalı kapak gösterir: kapanış hiç başlamadıysa veya
+      // (geç varışta) bitmeye vakti kalmadıysa son karede tamamlanmış
+      // sayılır.
+      final latestCloseStart = timelineSeconds - _gateCloseLength;
+      final closeBeganAt = _gateCloseBeganAt;
+      if (closeBeganAt == null || closeBeganAt > latestCloseStart) {
+        _gateCloseBeganAt = latestCloseStart;
+      }
       if (droppedCatchUp) {
         _settleLosersToFloor();
       }
@@ -373,7 +403,9 @@ class WhoPaysLotterySimulation {
       chamberPositions: List<Offset>.unmodifiable(
         balls.map((ball) => ball.position),
       ),
-      seatedBallIndex: phase == WhoPaysLotteryPhase.seated ? winnerIndex : null,
+      seatedBallIndex: phase == WhoPaysLotteryPhase.seated
+          ? capturedBallIndex
+          : null,
     );
   }
 
@@ -397,8 +429,31 @@ class WhoPaysLotterySimulation {
       );
   }
 
+  /// Reduced-motion'da kazanan, aynı seed ve başlangıç durumuyla kurulan
+  /// gölge kopyanın sona kadar koşulmasıyla öğrenilir. Gölge burada
+  /// güvenlidir: reduced motion fizik koşumu render etmez, ayrışabileceği
+  /// bir görsel koşum yoktur. Ana örneğin [balls] listesi mutasyona uğramaz.
+  int _resolveReducedMotionCaptured() {
+    final live = _capturedBallIndex;
+    if (live != null) return live;
+    final cached = _reducedMotionCaptured;
+    if (cached != null) return cached;
+    final shadow = WhoPaysLotterySimulation(
+      personCount: personCount,
+      seed: seed,
+      initialState: _initialState,
+    );
+    var target = 0.0;
+    while (target < shadow.durationSeconds - 1e-9) {
+      target = min(target + 1 / 60, shadow.durationSeconds);
+      shadow.advanceTo(target);
+    }
+    return _reducedMotionCaptured = shadow._capturedBallIndex!;
+  }
+
   List<Offset> _reducedMotionEndPositions() {
     final positions = List<Offset>.from(_reducedMotionStartPositions);
+    final winnerIndex = _resolveReducedMotionCaptured();
     positions[winnerIndex] = const Offset(0, winnerSeatY);
     final intakeBallIndex = _intakeBallIndex;
     if (intakeBallIndex != null && intakeBallIndex != winnerIndex) {
@@ -425,7 +480,7 @@ class WhoPaysLotterySimulation {
     renderPositions.clear();
     _reducedMotionStartPositions.clear();
     bladeCollisionCount = 0;
-    winnerGuideApplications = 0;
+    targetedForceApplications = 0;
 
     const minimumDistance = ballRadius * 2 + 4;
     for (var index = 0; index < personCount; index++) {
@@ -490,12 +545,19 @@ class WhoPaysLotterySimulation {
     final settling = drawTime >= _mixingEnd;
     final capturing = drawTime >= _settlingEnd;
 
+    // Son çare: garanti penceresi açıldı ve fizik hâlâ hiçbir topu ağızdan
+    // düşürmediyse, ağza O ANDA en yakın top atanır — endeks önseli yok.
+    if (_capturedBallIndex == null &&
+        capturing &&
+        drawTime >= _captureEnd - _guaranteeWindow) {
+      _capturedBallIndex = _nearestToMouth();
+    }
+
     for (var index = 0; index < balls.length; index++) {
       final ball = balls[index];
-      final isWinner = index == winnerIndex;
-      final winnerInTube =
-          isWinner && capturing && ball.position.dy >= tubeEntryY;
-      if (winnerInTube) _winnerReachedTube = true;
+      final isCaptured = index == _capturedBallIndex;
+      final capturedInTube = isCaptured && ball.position.dy >= tubeEntryY;
+      if (capturedInTube) _capturedReachedTube = true;
       final intakeActive =
           _phaseShift > 0 &&
           stepTime < _phaseShift &&
@@ -510,7 +572,7 @@ class WhoPaysLotterySimulation {
             ? const Offset(0, -_intakeSuction)
             : Offset.zero;
         dragRate = 0.3;
-      } else if (winnerInTube) {
+      } else if (capturedInTube) {
         final centering = _clampMagnitude(
           Offset(-ball.position.dx * 260 - ball.velocity.dx * 26, 0),
           2600,
@@ -522,15 +584,17 @@ class WhoPaysLotterySimulation {
         dragRate = ball.position.dy >= winnerSeatY - seatCushionZone
             ? seatCushionDragRate
             : tubeDragRate;
+        targetedForceApplications++;
       } else {
         // Çökme fazında iniş yardımı: toplar kapak açılmadan tabana insin
-        // diye yerçekimi geçici olarak güçlenir (tüm toplara eşit — kazanan
-        // tarafsızlığı bozulmaz).
+        // diye yerçekimi geçici olarak güçlenir (tüm toplara eşit —
+        // tarafsızlık bozulmaz).
         final inSettleWindow =
             drawTime >= _mixingEnd && drawTime < _settlingEnd;
-        // Kazanan tüpe geçtikten sonra kaybedenler de aynı yardımla tabana
-        // iner — son kare donmadan önce havada top kalmasın.
-        final loserHomeStretch = capturing && !isWinner && _winnerReachedTube;
+        // Yakalanan top tüpe geçtikten sonra kaybedenler de aynı yardımla
+        // tabana iner — son kare donmadan önce havada top kalmasın.
+        final loserHomeStretch =
+            capturing && !isCaptured && _capturedReachedTube;
         acceleration = Offset(
           0,
           (inSettleWindow || loserHomeStretch)
@@ -539,76 +603,39 @@ class WhoPaysLotterySimulation {
         );
         dragRate = settling ? settleDragRate : mixingDragRate;
 
-        // Kapak sırtı (bkz. gateRidge* sabitleri): karışım sonrası ağız
-        // üstüne inen top yana kaydırılır. Kazanan yakalamadan itibaren,
-        // intake topu tüp yolculuğu boyunca muaftır.
-        final ridgeActive =
-            drawTime >= _mixingEnd &&
-            !(isWinner && capturing) &&
-            !(index == _intakeBallIndex && !_intakeReleased && _phaseShift > 0);
-        if (ridgeActive &&
-            ball.position.dy > gateRidgeTopY &&
-            ball.position.dx.abs() < gateRidgeHalfWidth) {
-          final side = ball.position.dx.abs() > 0.5
-              ? ball.position.dx.sign
-              : (index.isEven ? 1.0 : -1.0);
-          final falloff = 1 - ball.position.dx.abs() / gateRidgeHalfWidth;
-          acceleration += Offset(side * gateRidgeStrength * falloff, 0);
-        }
-
-        if (isWinner && capturing) {
-          dragRate = winnerCaptureDragRate;
+        // Nötr drenaj: kapak neredeyse tam açık ve atama henüz yokken TÜM
+        // toplara eşit, ağza yönlü, rampalanan kuvvet. Ağzın üstü boşsa
+        // yığını ağza kaydırır — yine deliğe en yakın top düşer.
+        if (capturing &&
+            _capturedBallIndex == null &&
+            stepGateProgress > gateOpenForCapture) {
           final ramp =
               ((drawTime - _settlingEnd) / (_captureEnd - _settlingEnd)).clamp(
                 0.0,
                 1.0,
               );
-          final inGuarantee = drawTime >= _captureEnd - _guaranteeWindow;
-          final position = ball.position;
-          // Ağza olan açısal fark (−π..π]'ye sarılı; sarım olmadan sol
-          // duvarda işaret dönüp topu ±π noktasında hapsedebilirdi.
-          final rawDelta = pi / 2 - position.direction;
-          final angleToMouth = atan2(sin(rawDelta), cos(rawDelta));
-
-          Offset pull;
-          if (inGuarantee || angleToMouth.abs() <= captureNearMouthAngle) {
-            // Ağza yakın (veya son-çare penceresi): huniye bırakan düz yay.
-            pull =
-                (mouthTarget - position) * suctionSpringRate -
-                ball.velocity * suctionDampingRate;
-          } else {
-            // Duvar-sarmal emiş: radyal yay topu cama yaslar, teğetsel
-            // süpürme cam boyunca ağza taşır. Top merkezden (ve duran rotor
-            // kanatlarının içinden) kestirme geçmek yerine fanusun eğrisini
-            // izleyerek iner.
-            final distance = position.distance;
-            final radial = distance > 1
-                ? position / distance
-                : const Offset(0, 1);
-            final wallSpring =
-                radial * ((maxBallCenterRadius - distance) * suctionSpringRate);
-            // Taban güç: uzak duvardan başlayan toplar da pencere içinde
-            // yetişsin diye süpürme sıfırdan değil %50 güçten başlar.
-            final sweepStrength = suctionRampMax * (0.5 + 0.5 * ramp);
-            final sweep =
-                Offset(-radial.dy, radial.dx) *
-                angleToMouth.sign *
-                sweepStrength;
-            pull = wallSpring + sweep - ball.velocity * suctionDampingRate;
+          final toMouth = mouthTarget - ball.position;
+          final distance = toMouth.distance;
+          if (distance > 1) {
+            acceleration += toMouth / distance * (drainRampMax * ramp);
           }
+        }
 
-          final limit = inGuarantee
-              ? suctionGuaranteeMax
-              : suctionRampMax * (0.5 + 0.5 * ramp);
-          acceleration += _clampMagnitude(pull, limit);
-          winnerGuideApplications++;
-        } else if (!isWinner &&
+        if (isCaptured) {
+          // Son-çare transiti: atanmış top henüz tüpte değil — garanti yayı
+          // onu ağza taşır. (Doğal yakalamada top atandığı anda zaten huni
+          // bandındadır; bu dal yalnız son-çare atamasında çalışır.)
+          dragRate = capturedTransitDragRate;
+          final pull =
+              (mouthTarget - ball.position) * suctionSpringRate -
+              ball.velocity * suctionDampingRate;
+          acceleration += _clampMagnitude(pull, suctionGuaranteeMax);
+          targetedForceApplications++;
+        } else if (_capturedBallIndex != null &&
             capturing &&
-            // Yastık, kazanan tüpe girene dek açık kalır (duvar-sarmal rota
-            // düz hattan uzun sürer; taban yığını ağzı erken kapatmasın).
-            // Kazanan geçer geçmez söner ki kaybedenler kare donmadan önce
-            // tabana inebilsin.
-            !_winnerReachedTube &&
+            // Yastık, yakalanan top tüpe girene dek açık kalır; girer girmez
+            // söner ki kaybedenler kare donmadan önce tabana inebilsin.
+            !_capturedReachedTube &&
             drawTime < _droppingEnd &&
             stepGateProgress > 0.5) {
           final delta = ball.position - mouthTarget;
@@ -661,8 +688,13 @@ class WhoPaysLotterySimulation {
         maxImpactSpeed,
         _resolveRotorCollisions(stepRotorAngle, stepRotorSpeed, drawTime),
       );
-      maxImpactSpeed = max(maxImpactSpeed, _resolveBoundaries(drawTime));
+      maxImpactSpeed = max(
+        maxImpactSpeed,
+        _resolveBoundaries(drawTime, stepGateProgress),
+      );
     }
+
+    _assignCaptureIfEntered(drawTime, stepGateProgress);
 
     final postMix = drawTime >= _mixingEnd;
     for (var index = 0; index < balls.length; index++) {
@@ -672,20 +704,63 @@ class WhoPaysLotterySimulation {
         ball.velocity = ball.velocity / speed * maxBallSpeed;
       }
       // Karışım bittikten sonra sunum sakinleşir: düşüşler serbest düşüş
-      // tavanını aşamaz (tüm toplara eşit — tarafsızlık korunur) ve kazanan
-      // yakalama boyunca sinematik hız tavanına uyar. Roket düşüş /
-      // fırlamış kayış görüntüsünün önüne geçer.
+      // tavanını aşamaz (tüm toplara eşit — tarafsızlık korunur) ve
+      // yakalanan top sinematik hız tavanına uyar. Roket düşüş / fırlamış
+      // kayış görüntüsünün önüne geçer.
       if (postMix && ball.velocity.dy > postMixTerminalFallSpeed) {
         ball.velocity = Offset(ball.velocity.dx, postMixTerminalFallSpeed);
       }
-      if (index == winnerIndex && drawTime >= _settlingEnd) {
-        final winnerSpeed = ball.velocity.distance;
-        if (winnerSpeed > winnerCaptureMaxSpeed) {
-          ball.velocity = ball.velocity / winnerSpeed * winnerCaptureMaxSpeed;
+      if (index == _capturedBallIndex) {
+        final capturedSpeed = ball.velocity.distance;
+        if (capturedSpeed > winnerCaptureMaxSpeed) {
+          ball.velocity =
+              ball.velocity / capturedSpeed * winnerCaptureMaxSpeed;
         }
       }
     }
     return maxImpactSpeed;
+  }
+
+  /// Doğal yakalama ataması: kapak yeterince açıkken huni bandına girmiş
+  /// toplar arasından ağza en yakın olan seçilir. Endeks yalnız eşitlik
+  /// kırıcı bile değildir — ölçüt tamamen geometriktir.
+  void _assignCaptureIfEntered(double drawTime, double stepGateProgress) {
+    if (_capturedBallIndex != null) return;
+    if (drawTime < _settlingEnd || stepGateProgress <= gateOpenForCapture) {
+      return;
+    }
+    int? best;
+    var bestDistance = double.infinity;
+    for (var index = 0; index < balls.length; index++) {
+      final position = balls[index].position;
+      if (position.dy < tubeEntryY ||
+          position.dx.abs() > funnelHalfWidthAt(position.dy)) {
+        continue;
+      }
+      final distance = (position - mouthTarget).distance;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = index;
+      }
+    }
+    if (best != null) {
+      _capturedBallIndex = best;
+    }
+  }
+
+  /// Ağza (mouthTarget'a) en yakın topun endeksi — son-çare ve donma-karesi
+  /// garantilerinin ortak "en yakın kazanır" kuralı.
+  int _nearestToMouth() {
+    var best = 0;
+    var bestDistance = double.infinity;
+    for (var index = 0; index < balls.length; index++) {
+      final distance = (balls[index].position - mouthTarget).distance;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = index;
+      }
+    }
+    return best;
   }
 
   double _resolveBallCollisions(double drawTime) {
@@ -710,14 +785,12 @@ class WhoPaysLotterySimulation {
             : Offset.fromDirection((firstIndex + secondIndex) * 0.9);
         final overlap = minimumDistance - distance;
 
-        // Yakalama sırasında kazanan "ağır top" gibi davranır: temasta
-        // kaybeden kenara itilir, kazanan momentumunu korur. Böylece taban
-        // yığını kazananı ağzın dışında kilitleyemez; itilme fiziksel
+        // Atamadan itibaren yakalanan top "ağır top" gibi davranır: temasta
+        // diğeri kenara itilir, yakalanan momentumunu korur. Böylece taban
+        // yığını yakalananı ağzın dışında kilitleyemez; itilme fiziksel
         // (gerçek çarpışma) göründüğü için süzülme hissi doğmaz.
-        final firstIsCaptureWinner =
-            firstIndex == winnerIndex && drawTime >= _settlingEnd;
-        final secondIsCaptureWinner =
-            secondIndex == winnerIndex && drawTime >= _settlingEnd;
+        final firstIsCaptureWinner = firstIndex == _capturedBallIndex;
+        final secondIsCaptureWinner = secondIndex == _capturedBallIndex;
 
         // Karışım sonrası ayrıştırma itmesi kare başına sınırlanır: derin
         // binmelerde topu tek karede fırlatmak yerine birkaç kareye yayar
@@ -779,11 +852,12 @@ class WhoPaysLotterySimulation {
   ) {
     var maxImpactSpeed = 0.0;
     for (var ballIndex = 0; ballIndex < balls.length; ballIndex++) {
-      // From capture onward the winner is exempt from rotor contact: the
-      // suction must be able to pull it across the stationary rotor's
-      // territory to the mouth. The rotor is drawn behind the balls and
-      // mostly transparent, so the pass-through is not visible.
-      if (ballIndex == winnerIndex && drawTime >= _settlingEnd) {
+      // From assignment onward the captured ball is exempt from rotor
+      // contact: the last-resort spring must be able to pull it across the
+      // stationary rotor's territory to the mouth. The rotor is drawn
+      // behind the balls and mostly transparent, so the pass-through is not
+      // visible.
+      if (ballIndex == _capturedBallIndex) {
         continue;
       }
 
@@ -887,22 +961,31 @@ class WhoPaysLotterySimulation {
     return deepest;
   }
 
-  double _resolveBoundaries(double drawTime) {
+  double _resolveBoundaries(double drawTime, double stepGateProgress) {
     var maxImpactSpeed = 0.0;
+    final capturing = drawTime >= _settlingEnd;
+    // Ağız deliği: kapak neredeyse tam açık ve atama yokken huni bandı
+    // HERKESE açıktır — ağzın üstündeki top gerçekten düşer ve atanır.
+    // Atamadan sonra delik yalnız yakalanan topa (ve intake topuna) açıktır.
+    final mouthOpenForEntry =
+        capturing &&
+        _capturedBallIndex == null &&
+        stepGateProgress > gateOpenForCapture;
 
     for (var index = 0; index < balls.length; index++) {
       final ball = balls[index];
-      final winnerInTube =
-          index == winnerIndex &&
-          drawTime >= _settlingEnd &&
-          ball.position.dy >= tubeEntryY;
+      final inFunnelBand =
+          ball.position.dy >= tubeEntryY &&
+          ball.position.dx.abs() <= funnelHalfWidthAt(ball.position.dy);
+      final capturedInTube =
+          index == _capturedBallIndex && ball.position.dy >= tubeEntryY;
       final intakeInTube =
           index == _intakeBallIndex &&
           !_intakeReleased &&
           _phaseShift > 0 &&
           ball.position.dy >= tubeEntryY;
 
-      if (winnerInTube || intakeInTube) {
+      if (capturedInTube || intakeInTube || (mouthOpenForEntry && inFunnelBand)) {
         final halfWidth = funnelHalfWidthAt(ball.position.dy);
         if (ball.position.dx.abs() > halfWidth) {
           final normal = Offset(ball.position.dx.sign, 0);
@@ -922,16 +1005,22 @@ class WhoPaysLotterySimulation {
         continue;
       }
 
-      // Kapak sırtı geometrisi: karışım sonrası ağız kutusu dinlenilemez —
-      // içine oturan top, adım-bütçesi dahilinde yana tahliye edilir
-      // (tümsekten kayma gibi). Pass döngüsü içinde çalıştığı için
-      // yarattığı çakışmalar aynı adımda çözülür. Kazanan yakalamadan
-      // itibaren, intake topu prolog boyunca muaftır.
-      final ridgeExempt =
-          (index == winnerIndex && drawTime >= _settlingEnd) ||
-          (index == _intakeBallIndex && _phaseShift > 0 && drawTime < 0);
-      if (drawTime >= _mixingEnd &&
-          !ridgeExempt &&
+      // Ağız koridoru keepout'u: kapak anlamlı açıkken bant, o an tüpte
+      // seyahat hakkı olan topa aittir — diğerleri adım-bütçesi dahilinde
+      // yana tahliye edilir. İki dönem: (1) intake prologu — dönen topun
+      // koridoru, üstünde dinlenen top tarafından tıkanmasın; (2) yakalama
+      // ATANDIKTAN sonra — ikinci top sızamaz. Atama öncesi ve kapak
+      // kapandıktan sonra bölge serbesttir (kapalı kapağın üstünde
+      // dinlenmek doğaldır; yığının ağzın üstünde durması istenen durumdur).
+      // Pass döngüsü içinde çalıştığı için yarattığı çakışmalar aynı adımda
+      // çözülür.
+      final inPrologue = _phaseShift > 0 && drawTime < 0;
+      final keepoutActive =
+          stepGateProgress > 0.15 &&
+          (inPrologue
+              ? index != _intakeBallIndex
+              : _capturedBallIndex != null && index != _capturedBallIndex);
+      if (keepoutActive &&
           _ridgeShiftBudget[index] > 0 &&
           ball.position.dy > gateRidgeTopY &&
           ball.position.dx.abs() < mouthKeepoutHalfWidth) {
@@ -1007,7 +1096,7 @@ class WhoPaysLotterySimulation {
     );
     final used = List<bool>.filled(floorSlotAngles.length, false);
     for (var index = 0; index < balls.length; index++) {
-      if (index == winnerIndex) continue;
+      if (index == _capturedBallIndex) continue;
       final currentAngle = balls[index].position.direction;
       var best = 0;
       var bestDifference = double.infinity;
