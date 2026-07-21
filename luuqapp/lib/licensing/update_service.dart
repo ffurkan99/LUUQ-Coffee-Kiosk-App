@@ -452,7 +452,11 @@ class UpdateService {
     final client = http.Client();
     try {
       final tempDir = await getTemporaryDirectory();
-      return ApkDownloader(
+      // `return await` is load-bearing: without the await, the finally block
+      // closes the client BEFORE the download future runs, and every attempt
+      // dies instantly with "Client is already closed" (the field failure
+      // that broke OTA updates on kiosks).
+      return await ApkDownloader(
         client: client,
         destinationDirectory: tempDir,
       ).download(url, onProgress, cancellationToken: cancellationToken);
