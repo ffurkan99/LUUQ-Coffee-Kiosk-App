@@ -79,7 +79,16 @@ class WhoPaysLotterySimulation {
   static const double _gateOpenLength = 0.15;
   static const double _gateCloseStart = 3.10;
   static const double _gateCloseEnd = 3.30;
-  static const double _guaranteeWindow = 0.30;
+  // Son-çare penceresi: duvar-sarmal emiş topu zamanında getiremezse son
+  // 100 ms'de düz yay devreye girer. Ana teslimatçı duvar-sarmal kuvvettir.
+  static const double _guaranteeWindow = 0.10;
+
+  /// Çökme fazında yerçekimi çarpanı — kapak açılmadan topların tabana
+  /// inmesine yardım eder (tüm toplara eşit uygulanır).
+  static const double settleAssistGravityFactor = 1.3;
+
+  /// Kazananın duvardan ayrılıp huniye yöneldiği açısal eşik (ağza göre).
+  static const double captureNearMouthAngle = 0.45;
 
   static const int idleDurationMilliseconds = 3400;
 
@@ -133,8 +142,12 @@ class WhoPaysLotterySimulation {
   static const double suctionGuaranteeMax = 8000.0;
 
   // Outward air cushion that clears losers away from the open mouth.
-  static const double cushionRadius = 55.0;
-  static const double cushionMax = 900.0;
+  static const double cushionRadius = 85.0;
+  static const double cushionMax = 1400.0;
+
+  /// Yakalama pulluğunun kaybedene aktarabileceği en yüksek hız (px/s) —
+  /// üstü kırpılır ki itilen toplar duvara fırlamasın.
+  static const double plowKickCap = 320.0;
 
   static const int rotorBladeCount = 3;
   static const double rotorHubRadius = 15.0;
@@ -173,6 +186,11 @@ class WhoPaysLotterySimulation {
   final double _phaseShift;
   final int? _intakeBallIndex;
   bool _intakeReleased = false;
+
+  // Kazanan huniden tüpe bir kez girdi mi? Girince hava yastığı görevini
+  // tamamlar ve kaybedenler dondurulmadan önce tabana inebilsin diye
+  // iniş yardımı devralır.
+  bool _winnerReachedTube = false;
 
   final List<WhoPaysBallState> balls = <WhoPaysBallState>[];
   final List<Offset> renderPositions = <Offset>[];
@@ -425,6 +443,7 @@ class WhoPaysLotterySimulation {
       final isWinner = index == winnerIndex;
       final winnerInTube =
           isWinner && capturing && ball.position.dy >= tubeEntryY;
+      if (winnerInTube) _winnerReachedTube = true;
       final intakeActive =
           _phaseShift > 0 &&
           stepTime < _phaseShift &&
@@ -447,7 +466,20 @@ class WhoPaysLotterySimulation {
         acceleration = centering + const Offset(0, chuteGravity);
         dragRate = tubeDragRate;
       } else {
-        acceleration = const Offset(0, gravity);
+        // Çökme fazında iniş yardımı: toplar kapak açılmadan tabana insin
+        // diye yerçekimi geçici olarak güçlenir (tüm toplara eşit — kazanan
+        // tarafsızlığı bozulmaz).
+        final inSettleWindow =
+            drawTime >= _mixingEnd && drawTime < _settlingEnd;
+        // Kazanan tüpe geçtikten sonra kaybedenler de aynı yardımla tabana
+        // iner — son kare donmadan önce havada top kalmasın.
+        final loserHomeStretch = capturing && !isWinner && _winnerReachedTube;
+        acceleration = Offset(
+          0,
+          (inSettleWindow || loserHomeStretch)
+              ? gravity * settleAssistGravityFactor
+              : gravity,
+        );
         dragRate = settling ? settleDragRate : mixingDragRate;
 
         if (isWinner && capturing) {
@@ -457,25 +489,65 @@ class WhoPaysLotterySimulation {
                 0.0,
                 1.0,
               );
-          final limit = drawTime >= _captureEnd - _guaranteeWindow
+          final inGuarantee = drawTime >= _captureEnd - _guaranteeWindow;
+          final position = ball.position;
+          // Ağza olan açısal fark (−π..π]'ye sarılı; sarım olmadan sol
+          // duvarda işaret dönüp topu ±π noktasında hapsedebilirdi.
+          final rawDelta = pi / 2 - position.direction;
+          final angleToMouth = atan2(sin(rawDelta), cos(rawDelta));
+
+          Offset pull;
+          if (inGuarantee || angleToMouth.abs() <= captureNearMouthAngle) {
+            // Ağza yakın (veya son-çare penceresi): huniye bırakan düz yay.
+            pull =
+                (mouthTarget - position) * suctionSpringRate -
+                ball.velocity * suctionDampingRate;
+          } else {
+            // Duvar-sarmal emiş: radyal yay topu cama yaslar, teğetsel
+            // süpürme cam boyunca ağza taşır. Top merkezden (ve duran rotor
+            // kanatlarının içinden) kestirme geçmek yerine fanusun eğrisini
+            // izleyerek iner.
+            final distance = position.distance;
+            final radial = distance > 1
+                ? position / distance
+                : const Offset(0, 1);
+            final wallSpring =
+                radial * ((maxBallCenterRadius - distance) * suctionSpringRate);
+            // Taban güç: uzak duvardan başlayan toplar da pencere içinde
+            // yetişsin diye süpürme sıfırdan değil %35 güçten başlar.
+            final sweepStrength = suctionRampMax * (0.35 + 0.65 * ramp);
+            final sweep =
+                Offset(-radial.dy, radial.dx) *
+                angleToMouth.sign *
+                sweepStrength;
+            pull = wallSpring + sweep - ball.velocity * suctionDampingRate;
+          }
+
+          final limit = inGuarantee
               ? suctionGuaranteeMax
-              : suctionRampMax * ramp;
-          final pull =
-              (mouthTarget - ball.position) * suctionSpringRate -
-              ball.velocity * suctionDampingRate;
+              : suctionRampMax * (0.35 + 0.65 * ramp);
           acceleration += _clampMagnitude(pull, limit);
           winnerGuideApplications++;
         } else if (!isWinner &&
             capturing &&
-            drawTime < _captureEnd &&
+            // Yastık, kazanan tüpe girene dek açık kalır (duvar-sarmal rota
+            // düz hattan uzun sürer; taban yığını ağzı erken kapatmasın).
+            // Kazanan geçer geçmez söner ki kaybedenler kare donmadan önce
+            // tabana inebilsin.
+            !_winnerReachedTube &&
+            drawTime < _droppingEnd &&
             stepGateProgress > 0.5) {
           final delta = ball.position - mouthTarget;
           final distance = delta.distance;
           if (distance < cushionRadius && distance > 0.001) {
-            acceleration +=
-                delta /
-                distance *
-                (cushionMax * (1 - distance / cushionRadius));
+            // Süpürücü: radyal üfleme topları dikine fırlatıp son karede
+            // havada bırakıyordu. Yana (hafif aşağı basımlı) itiş, ağzı
+            // boşaltırken kaybedenleri taban boyunca iki yana ayırır.
+            final sideways = ball.position.dx.abs() > 0.5
+                ? ball.position.dx.sign
+                : (index.isEven ? 1.0 : -1.0);
+            final strength = cushionMax * (1 - distance / cushionRadius);
+            acceleration += Offset(sideways * strength, strength * 0.15);
           }
         }
       }
@@ -540,18 +612,51 @@ class WhoPaysLotterySimulation {
             ? delta / distance
             : Offset.fromDirection((firstIndex + secondIndex) * 0.9);
         final overlap = minimumDistance - distance;
-        first.position -= normal * (overlap * 0.5);
-        second.position += normal * (overlap * 0.5);
+
+        // Yakalama sırasında kazanan "ağır top" gibi davranır: temasta
+        // kaybeden kenara itilir, kazanan momentumunu korur. Böylece taban
+        // yığını kazananı ağzın dışında kilitleyemez; itilme fiziksel
+        // (gerçek çarpışma) göründüğü için süzülme hissi doğmaz.
+        final firstIsCaptureWinner =
+            firstIndex == winnerIndex && drawTime >= _settlingEnd;
+        final secondIsCaptureWinner =
+            secondIndex == winnerIndex && drawTime >= _settlingEnd;
+
+        if (firstIsCaptureWinner) {
+          second.position += normal * overlap;
+        } else if (secondIsCaptureWinner) {
+          first.position -= normal * overlap;
+        } else {
+          first.position -= normal * (overlap * 0.5);
+          second.position += normal * (overlap * 0.5);
+        }
 
         final relativeVelocity = second.velocity - first.velocity;
         final normalSpeed = _dot(relativeVelocity, normal);
         if (normalSpeed >= 0) continue;
 
         maxImpactSpeed = max(maxImpactSpeed, -normalSpeed);
-        final impulseMagnitude = -(1 + restitution) * normalSpeed / 2;
-        final impulse = normal * impulseMagnitude;
-        first.velocity -= impulse;
-        second.velocity += impulse;
+        if (firstIsCaptureWinner) {
+          // Pulluk tekmesi tavanlı: yolu asıl açan konumsal itme; sınırsız
+          // impuls kaybedenleri duvara fırlatıp son karede havada
+          // bırakıyordu.
+          final kick = ((1 + restitution) * normalSpeed).clamp(
+            -plowKickCap,
+            0.0,
+          );
+          second.velocity -= normal * kick;
+        } else if (secondIsCaptureWinner) {
+          final kick = ((1 + restitution) * normalSpeed).clamp(
+            -plowKickCap,
+            0.0,
+          );
+          first.velocity += normal * kick;
+        } else {
+          final impulseMagnitude = -(1 + restitution) * normalSpeed / 2;
+          final impulse = normal * impulseMagnitude;
+          first.velocity -= impulse;
+          second.velocity += impulse;
+        }
       }
     }
     return maxImpactSpeed;

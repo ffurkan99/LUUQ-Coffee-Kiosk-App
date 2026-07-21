@@ -217,3 +217,19 @@ Aşağıdaki adjudike edilmiş sapmalar orijinal metne göre değişse de gönde
 7. Rotor açısı exportState'e dahil değil: yeniden çekilişin ilk karesinde
    rotor ~13° atlar (3 kanatlı simetriyle fark edilmesi güç) — kabul
    edilmiş cila sınırı.
+
+### Ek — 21 Temmuz 2026: duvar-sarmal yakalama
+
+Kullanıcı isteğiyle yakalama koreografisi değişti: kazanan artık ağza kuş
+uçuşu çekilmek yerine önce cama yaslanıp (radyal yay) fanusun eğrisi
+boyunca süpürülerek (teğetsel kuvvet; açısal fark ±π'ye sarılı) ağza iner;
+ağza `captureNearMouthAngle` (0.45 rad) kala huniye bırakan düz yaya geçer.
+Beraberinde: çökme fazında iniş yardımı (`settleAssistGravityFactor` 1.3,
+tüm toplara eşit — tarafsızlık korunur); son-çare penceresi 0.30 → 0.10 sn
+(ana teslimatçı duvar kuvvetidir); hava yastığı radyal üflemeden
+yana-süpürücüye çevrildi ve kazanan tüpe girene dek açık kalacak şekilde
+genişletildi (85 px / 1400); yakalama sırasında kazanan çarpışmada "ağır
+top"tur (kaybeden kenara itilir, aktarılan hız `plowKickCap` 320 px/s ile
+sınırlı). Yeni invariant testi: kazanan yakalama boyunca duvara yakın kalır
+(r ≥ 85 / tüpte / ağız bölgesinde) — merkezden ve duran rotor kanatlarının
+içinden kestirme geçemez.
