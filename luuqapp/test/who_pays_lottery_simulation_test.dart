@@ -9,7 +9,6 @@ void main() {
       test('$personCount balls start inside the cage without overlap', () {
         final simulation = WhoPaysLotterySimulation(
           personCount: personCount,
-          winnerIndex: 0,
           seed: 7000 + personCount,
         );
 
@@ -23,17 +22,9 @@ void main() {
       });
     }
 
-    test('the same seed produces the same simulation', () {
-      final first = WhoPaysLotterySimulation(
-        personCount: 6,
-        winnerIndex: 3,
-        seed: 1842,
-      );
-      final second = WhoPaysLotterySimulation(
-        personCount: 6,
-        winnerIndex: 3,
-        seed: 1842,
-      );
+    test('the same seed produces the same simulation and the same winner', () {
+      final first = WhoPaysLotterySimulation(personCount: 6, seed: 1842);
+      final second = WhoPaysLotterySimulation(personCount: 6, seed: 1842);
 
       _advanceInFrames(first, 2.5);
       _advanceInFrames(second, 2.5);
@@ -44,14 +35,15 @@ void main() {
         first.balls.map((ball) => ball.velocity).toList(),
         second.balls.map((ball) => ball.velocity).toList(),
       );
+
+      _advanceInFrames(first, first.durationSeconds);
+      _advanceInFrames(second, second.durationSeconds);
+      expect(first.capturedBallIndex, isNotNull);
+      expect(first.capturedBallIndex, second.capturedBallIndex);
     });
 
     test('timeline phases follow the approved choreography', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 4,
-        winnerIndex: 2,
-        seed: 5,
-      );
+      final simulation = WhoPaysLotterySimulation(personCount: 4, seed: 5);
 
       expect(simulation.durationSeconds, closeTo(3.40, 1e-9));
       expect(simulation.durationMilliseconds, 3400);
@@ -75,26 +67,34 @@ void main() {
       expect(simulation.phase, WhoPaysLotteryPhase.seated);
     });
 
-    test('no winner-specific force is applied before capture starts', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 6,
-        winnerIndex: 1,
-        seed: 314159,
-      );
+    // Total tarafsızlık: yakalama ataması gerçekleşene kadar hiçbir topa
+    // endekse-koşullu kuvvet uygulanamaz. Kazanan, kuvvetlerin değil
+    // geometrinin sonucudur.
+    for (final seed in const <int>[314159, 424242]) {
+      test('no index-conditioned force fires before capture ($seed)', () {
+        final simulation = WhoPaysLotterySimulation(
+          personCount: 6,
+          seed: seed,
+        );
 
-      _advanceInFrames(simulation, simulation.settlingEndSeconds - 0.001);
-      expect(simulation.winnerGuideApplications, 0);
-
-      _advanceInFrames(simulation, simulation.durationSeconds);
-      expect(simulation.winnerGuideApplications, greaterThan(0));
-    });
+        var target = 0.0;
+        while (target < simulation.durationSeconds - 1e-9) {
+          target = math.min(target + 1 / 60, simulation.durationSeconds);
+          simulation.advanceTo(target);
+          if (simulation.capturedBallIndex == null) {
+            expect(
+              simulation.targetedForceApplications,
+              0,
+              reason: 'neutrality broken at ${target.toStringAsFixed(2)}s',
+            );
+          }
+        }
+        expect(simulation.capturedBallIndex, isNotNull);
+      });
+    }
 
     test('the gate opens during capture and is closed at the end', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 3,
-        winnerIndex: 0,
-        seed: 42,
-      );
+      final simulation = WhoPaysLotterySimulation(personCount: 3, seed: 42);
 
       _advanceInFrames(simulation, 2.50);
       expect(simulation.gateProgress, 0);
@@ -105,11 +105,7 @@ void main() {
     });
 
     test('balls remain finite, separated, and inside the glass', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 6,
-        winnerIndex: 4,
-        seed: 99173,
-      );
+      final simulation = WhoPaysLotterySimulation(personCount: 6, seed: 99173);
 
       var target = 0.0;
       final end = simulation.settlingEndSeconds - 0.0001;
@@ -136,7 +132,6 @@ void main() {
     test('mixing does not pin most balls to one glass wall', () {
       final simulation = WhoPaysLotterySimulation(
         personCount: 6,
-        winnerIndex: 2,
         seed: 20260720,
       );
 
@@ -154,11 +149,7 @@ void main() {
     });
 
     test('a large frame gap is capped at eight physics steps', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 4,
-        winnerIndex: 1,
-        seed: 77,
-      );
+      final simulation = WhoPaysLotterySimulation(personCount: 4, seed: 77);
 
       final report = simulation.advanceTo(1.8);
 
@@ -174,11 +165,7 @@ void main() {
     });
 
     test('fan power follows the rotor and reaches zero before capture', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 3,
-        winnerIndex: 2,
-        seed: 12,
-      );
+      final simulation = WhoPaysLotterySimulation(personCount: 3, seed: 12);
 
       expect(simulation.fanPower, 0);
       simulation.advanceTo(simulation.spinUpEndSeconds);
@@ -188,18 +175,21 @@ void main() {
       expect(simulation.rotorSpeed, 0);
     });
 
+    // Fizik-öncelikli çekirdek sözleşme: her çekilişte fizik tam bir top
+    // yakalar, tüp boğazından yalnız o geçer ve donma karesinden önce
+    // fiziksel olarak yuvaya varır.
     for (var personCount = 2; personCount <= 6; personCount++) {
       for (final seed in const <int>[1, 97, 5000, 977351]) {
-        test('winner $personCount/$seed is seated with the gate closed', () {
-          final winnerIndex = seed % personCount;
+        test('draw $personCount/$seed captures exactly one ball and seats it',
+            () {
           final simulation = WhoPaysLotterySimulation(
             personCount: personCount,
-            winnerIndex: winnerIndex,
             seed: seed,
           );
 
+          final crossedThroat = <int>{};
+          List<Offset>? preFinalPositions;
           var target = simulation.timelineSeconds;
-          Offset? preFinalWinnerPosition;
           while (target < simulation.durationSeconds) {
             final nextTarget = math.min(
               target + 1 / 60,
@@ -208,30 +198,41 @@ void main() {
             final isFinalFrame = nextTarget >= simulation.durationSeconds;
             target = nextTarget;
             simulation.advanceTo(target);
+            for (var i = 0; i < personCount; i++) {
+              if (simulation.renderPositions[i].dy >=
+                  WhoPaysLotterySimulation.funnelBottomY) {
+                crossedThroat.add(i);
+              }
+            }
             if (!isFinalFrame) {
-              preFinalWinnerPosition = simulation.renderPositions[winnerIndex];
+              preFinalPositions = List<Offset>.from(simulation.renderPositions);
             }
           }
+
+          final captured = simulation.capturedBallIndex;
+          expect(captured, isNotNull, reason: 'no ball was captured');
+          expect(
+            crossedThroat,
+            {captured},
+            reason: 'only the captured ball may pass the tube throat',
+          );
 
           // The end-of-timeline seat guarantee must be a safety net for
           // resume jumps, not part of normal playback.
           expect(
-            (preFinalWinnerPosition! - const Offset(0, 209)).distance,
+            (preFinalPositions![captured!] - const Offset(0, 209)).distance,
             lessThanOrEqualTo(24),
             reason:
-                'winner $personCount/$seed was not physically seated before '
-                'the final frame',
+                'captured ball $personCount/$seed was not physically seated '
+                'before the final frame',
           );
 
           expect(simulation.phase, WhoPaysLotteryPhase.seated);
           expect(simulation.gateProgress, 0);
-          expect(simulation.renderPositions[winnerIndex].dx, closeTo(0, 0.001));
-          expect(
-            simulation.renderPositions[winnerIndex].dy,
-            closeTo(209, 0.001),
-          );
+          expect(simulation.renderPositions[captured].dx, closeTo(0, 0.001));
+          expect(simulation.renderPositions[captured].dy, closeTo(209, 0.001));
           for (var index = 0; index < simulation.personCount; index++) {
-            if (index == winnerIndex) continue;
+            if (index == captured) continue;
             expect(
               simulation.renderPositions[index].distance,
               lessThanOrEqualTo(
@@ -241,13 +242,13 @@ void main() {
           }
 
           for (var first = 0; first < simulation.personCount; first++) {
-            if (first == winnerIndex) continue;
+            if (first == captured) continue;
             for (
               var second = first + 1;
               second < simulation.personCount;
               second++
             ) {
-              if (second == winnerIndex) continue;
+              if (second == captured) continue;
               expect(
                 (simulation.renderPositions[first] -
                         simulation.renderPositions[second])
@@ -255,7 +256,7 @@ void main() {
                 greaterThanOrEqualTo(41),
                 reason:
                     'losers $first and $second end-state overlap for '
-                    'winner $personCount/$seed',
+                    'draw $personCount/$seed',
               );
             }
           }
@@ -263,39 +264,38 @@ void main() {
       }
     }
 
-    // Kapak sırtı: hiçbir top deliğin tam üstünde park edip "asıl düşmesi
-    // gereken top" gibi görünemez — kapak açılırken ağız bölgesi kazanan
-    // dışında boş olmalıdır.
+    // Ağız yalnız yakalanan topu kabul eder: atamadan sonra, kapak anlamlı
+    // şekilde açıkken, başka hiçbir top huninin derinliğinde oyalanamaz
+    // (keepout tahliyesi onu birkaç karede yana süpürmelidir).
     for (final seed in const <int>[1, 3, 97, 5000, 42424, 977351]) {
       for (final personCount in const <int>[4, 6]) {
-        test('no loser parks over the gate mouth ($personCount/$seed)', () {
-          final winnerIndex = seed % personCount;
+        test('mouth admits only the captured ball ($personCount/$seed)', () {
           final simulation = WhoPaysLotterySimulation(
             personCount: personCount,
-            winnerIndex: winnerIndex,
             seed: seed,
           );
 
-          // "Park" = kutuda 9+ ardışık kare (~0.15 sn) kalmak. Kazananın
-          // buldozeri kaybedeni bir anlığına ağız üstünden süpürebilir —
-          // bu geçiş meşrudur; yasak olan orada DURMAKTIR.
           var target = 0.0;
-          final windowEnd = simulation.settlingEndSeconds + 0.25;
-          final consecutiveInBox = List<int>.filled(personCount, 0);
-          while (target < windowEnd) {
-            target = math.min(target + 1 / 60, windowEnd);
+          final consecutiveDeep = List<int>.filled(personCount, 0);
+          while (target < simulation.durationSeconds) {
+            target = math.min(target + 1 / 60, simulation.durationSeconds);
             simulation.advanceTo(target);
-            if (target < simulation.settlingEndSeconds) continue;
+            final captured = simulation.capturedBallIndex;
+            if (captured == null || simulation.gateProgress <= 0.15) {
+              continue;
+            }
             for (var i = 0; i < personCount; i++) {
-              if (i == winnerIndex) continue;
+              if (i == captured) continue;
               final ball = simulation.renderPositions[i];
-              final inBox = ball.dx.abs() <= 24 && ball.dy >= 86;
-              consecutiveInBox[i] = inBox ? consecutiveInBox[i] + 1 : 0;
+              final deepInFunnel =
+                  ball.dy >= WhoPaysLotterySimulation.tubeEntryY + 6 &&
+                  ball.dx.abs() <= 24;
+              consecutiveDeep[i] = deepInFunnel ? consecutiveDeep[i] + 1 : 0;
               expect(
-                consecutiveInBox[i],
+                consecutiveDeep[i],
                 lessThan(9),
                 reason:
-                    'loser $i parks over the mouth at '
+                    'ball $i lingers in the open funnel at '
                     '${target.toStringAsFixed(2)}s '
                     '(${ball.dx.toStringAsFixed(0)}, ${ball.dy.toStringAsFixed(0)})',
               );
@@ -306,14 +306,13 @@ void main() {
     }
 
     // Kapak, tüpten inen topun üstünden kapanamaz: kapanış süpürmesi
-    // sırasında kazanan çubuğun süpürme bandında (dy 112-154) olamaz.
+    // sırasında yakalanan top çubuğun süpürme bandında (dy 112-154) olamaz.
     for (final seed in const <int>[1, 97, 5000, 977351]) {
       for (final personCount in const <int>[2, 4, 6]) {
-        test('gate never closes through the winner ($personCount/$seed)', () {
-          final winnerIndex = seed % personCount;
+        test('gate never closes through the captured ball ($personCount/$seed)',
+            () {
           final simulation = WhoPaysLotterySimulation(
             personCount: personCount,
-            winnerIndex: winnerIndex,
             seed: seed,
           );
 
@@ -326,90 +325,40 @@ void main() {
             final closing =
                 previousGate != null && gate < previousGate && gate > 0;
             previousGate = gate;
-            if (!closing) continue;
-            final winner = simulation.renderPositions[winnerIndex];
+            final captured = simulation.capturedBallIndex;
+            if (!closing || captured == null) continue;
+            final ball = simulation.renderPositions[captured];
             expect(
-              winner.dy > 112 && winner.dy < 154,
+              ball.dy > 112 && ball.dy < 154,
               isFalse,
               reason:
-                  'gate sweeps through the winner at '
-                  '${target.toStringAsFixed(2)}s (dy=${winner.dy.toStringAsFixed(0)})',
+                  'gate sweeps through the captured ball at '
+                  '${target.toStringAsFixed(2)}s (dy=${ball.dy.toStringAsFixed(0)})',
             );
           }
         });
       }
     }
 
-    // Yakalama koreografisi: kazanan top ağza kuş uçuşu süzülmek yerine önce
-    // cama yaslanıp fanusun eğrisi boyunca kayarak iner. Bu, topun merkezden
-    // (ve duran rotor kanatlarının içinden) kestirme geçmesini yasaklar.
-    for (final seed in const <int>[1, 97, 5000, 977351]) {
-      for (final personCount in const <int>[2, 6]) {
-        test(
-          'winner hugs the glass while being captured ($personCount/$seed)',
-          () {
-            final winnerIndex = seed % personCount;
-            final simulation = WhoPaysLotterySimulation(
-              personCount: personCount,
-              winnerIndex: winnerIndex,
-              seed: seed,
-            );
-
-            // Pencere tüm yakalamayı kapsar (son-çare dönemi dahil): kazanan
-            // tüpe girene dek merkezden kestirme YOK — düz-hat çekişi hiçbir
-            // aşamada geri dönemez.
-            var target = 0.0;
-            var winnerEnteredTube = false;
-            while (target < 3.30 && !winnerEnteredTube) {
-              target = math.min(target + 1 / 60, 3.30);
-              simulation.advanceTo(target);
-              winnerEnteredTube =
-                  simulation.renderPositions[winnerIndex].dy >=
-                  WhoPaysLotterySimulation.tubeEntryY + 10;
-              if (target < 2.62) continue;
-              final winner = simulation.renderPositions[winnerIndex];
-              final nearMouth = (math.pi / 2 - winner.direction).abs() <= 0.55;
-              final onWall = winner.distance >= 85;
-              final inTube = winner.dy >= WhoPaysLotterySimulation.tubeEntryY;
-              expect(
-                onWall || inTube || nearMouth,
-                isTrue,
-                reason:
-                    'winner cut through the chamber at '
-                    '${target.toStringAsFixed(2)}s '
-                    '(r=${winner.distance.toStringAsFixed(1)})',
-              );
-            }
-          },
-        );
-      }
-    }
-
-    test('the winner descends monotonically after capture ends', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 5,
-        winnerIndex: 2,
-        seed: 101,
-      );
+    test('the captured ball descends monotonically after capture ends', () {
+      final simulation = WhoPaysLotterySimulation(personCount: 5, seed: 101);
       _advanceInFrames(simulation, simulation.captureEndSeconds);
 
-      var previousY = simulation.renderPositions[2].dy;
+      final captured = simulation.capturedBallIndex;
+      expect(captured, isNotNull);
+      var previousY = simulation.renderPositions[captured!].dy;
       var target = simulation.captureEndSeconds;
       while (target < simulation.droppingEndSeconds) {
         target = math.min(target + 1 / 120, simulation.droppingEndSeconds);
         simulation.advanceTo(target);
-        final currentY = simulation.renderPositions[2].dy;
+        final currentY = simulation.renderPositions[captured].dy;
         expect(currentY + 0.001, greaterThanOrEqualTo(previousY));
         previousY = currentY;
       }
     });
 
     test('reduced motion keeps the gate closed and ends at the result', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 4,
-        winnerIndex: 1,
-        seed: 8,
-      );
+      final simulation = WhoPaysLotterySimulation(personCount: 4, seed: 8);
 
       simulation.advanceReducedMotion(0.5);
       expect(simulation.rotorAngle, 0);
@@ -420,9 +369,26 @@ void main() {
       simulation.advanceReducedMotion(1);
       expect(simulation.phase, WhoPaysLotteryPhase.seated);
       expect(simulation.gateProgress, 0);
-      expect(simulation.renderPositions[1], const Offset(0, 209));
+      final captured = simulation.capturedBallIndex;
+      expect(captured, isNotNull);
+      expect(simulation.renderPositions[captured!], const Offset(0, 209));
       expect(simulation.contentOpacity, 1);
     });
+
+    // Gölge-canlı eşdeğerliği: reduced-motion gölge çözümü, aynı seed'in
+    // canlı koşumuyla aynı kazananı vermek zorundadır.
+    for (final seed in const <int>[8, 977351]) {
+      test('shadow resolution matches the live run (seed $seed)', () {
+        final live = WhoPaysLotterySimulation(personCount: 5, seed: seed);
+        _advanceInFrames(live, live.durationSeconds);
+
+        final reduced = WhoPaysLotterySimulation(personCount: 5, seed: seed);
+        reduced.advanceReducedMotion(1);
+
+        expect(live.capturedBallIndex, isNotNull);
+        expect(reduced.capturedBallIndex, live.capturedBallIndex);
+      });
+    }
 
     test('funnel half-width narrows monotonically to the tube', () {
       expect(
@@ -443,22 +409,19 @@ void main() {
 
     for (final seed in const <int>[3, 811, 42424]) {
       test('no ball teleports at 60 fps playback (seed $seed)', () {
-        final simulation = WhoPaysLotterySimulation(
-          personCount: 6,
-          winnerIndex: seed % 6,
-          seed: seed,
-        );
+        final simulation = WhoPaysLotterySimulation(personCount: 6, seed: seed);
 
         var previous = List<Offset>.from(simulation.renderPositions);
         var target = 0.0;
         while (target < simulation.durationSeconds) {
           target = math.min(target + 1 / 60, simulation.durationSeconds);
           simulation.advanceTo(target);
-          // Rotor-active phases: a full-speed blade strike can legitimately
-          // move a ball ~25 px in one frame — not a teleport. After the rotor
-          // stops (settling onward: capture, funnel, drop), constraint
-          // projection is the only jump source, so the tight bound applies.
-          final bound = target < simulation.settlingEndSeconds ? 32.0 : 24.0;
+          // Rotor-active phases: a full-speed blade strike or a deep-overlap
+          // resolution can legitimately move a ball ~25-33 px in one frame —
+          // not a teleport. After the rotor stops (settling onward: capture,
+          // funnel, drop), constraint projection is the only jump source, so
+          // the tight bound applies.
+          final bound = target < simulation.settlingEndSeconds ? 34.0 : 24.0;
           for (var index = 0; index < simulation.personCount; index++) {
             final jump =
                 (simulation.renderPositions[index] - previous[index]).distance;
@@ -475,25 +438,23 @@ void main() {
       });
     }
 
-    test('the winner respects the funnel walls on the way down', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 6,
-        winnerIndex: 5,
-        seed: 606,
-      );
+    test('the captured ball respects the funnel walls on the way down', () {
+      final simulation = WhoPaysLotterySimulation(personCount: 6, seed: 606);
 
       var sawTube = false;
       var target = 0.0;
       while (target < simulation.durationSeconds) {
         target = math.min(target + 1 / 120, simulation.durationSeconds);
         simulation.advanceTo(target);
-        final winner = simulation.renderPositions[5];
-        if (winner.dy >= WhoPaysLotterySimulation.tubeEntryY) {
+        final captured = simulation.capturedBallIndex;
+        if (captured == null) continue;
+        final ball = simulation.renderPositions[captured];
+        if (ball.dy >= WhoPaysLotterySimulation.tubeEntryY) {
           sawTube = true;
           expect(
-            winner.dx.abs(),
+            ball.dx.abs(),
             lessThanOrEqualTo(
-              WhoPaysLotterySimulation.funnelHalfWidthAt(winner.dy) + 0.5,
+              WhoPaysLotterySimulation.funnelHalfWidthAt(ball.dy) + 0.5,
             ),
           );
         }
@@ -501,25 +462,23 @@ void main() {
       expect(
         sawTube,
         isTrue,
-        reason: 'winner never entered the funnel — assertions were vacuous',
+        reason: 'captured ball never entered the funnel — assertions vacuous',
       );
     });
 
     test('a resume jump leaves no loser suspended mid-air', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 6,
-        winnerIndex: 2,
-        seed: 8080,
-      );
+      final simulation = WhoPaysLotterySimulation(personCount: 6, seed: 8080);
 
       _advanceInFrames(simulation, 1.2); // karışımın ortası
       simulation.advanceTo(simulation.durationSeconds); // arka plan sıçraması
 
       expect(simulation.phase, WhoPaysLotteryPhase.seated);
       expect(simulation.gateProgress, 0);
-      expect(simulation.renderPositions[2], const Offset(0, 209));
+      final captured = simulation.capturedBallIndex;
+      expect(captured, isNotNull);
+      expect(simulation.renderPositions[captured!], const Offset(0, 209));
       for (var index = 0; index < simulation.personCount; index++) {
-        if (index == 2) continue;
+        if (index == captured) continue;
         final position = simulation.renderPositions[index];
         expect(
           position.distance,
@@ -532,17 +491,16 @@ void main() {
     });
 
     test('continuous playback does not snap losers on the final frame', () {
-      final simulation = WhoPaysLotterySimulation(
-        personCount: 6,
-        winnerIndex: 0,
-        seed: 121212,
-      );
+      final simulation = WhoPaysLotterySimulation(personCount: 6, seed: 121212);
 
       _advanceInFrames(simulation, simulation.durationSeconds - 1 / 60);
       final before = List<Offset>.from(simulation.renderPositions);
       simulation.advanceTo(simulation.durationSeconds);
 
-      for (var index = 1; index < simulation.personCount; index++) {
+      final captured = simulation.capturedBallIndex;
+      expect(captured, isNotNull);
+      for (var index = 0; index < simulation.personCount; index++) {
+        if (index == captured) continue;
         expect(
           (simulation.renderPositions[index] - before[index]).distance,
           lessThanOrEqualTo(24),
@@ -552,20 +510,17 @@ void main() {
     });
 
     test('exportState captures seated results for the next draw', () {
-      final first = WhoPaysLotterySimulation(
-        personCount: 4,
-        winnerIndex: 3,
-        seed: 2024,
-      );
+      final first = WhoPaysLotterySimulation(personCount: 4, seed: 2024);
       _advanceInFrames(first, first.durationSeconds);
 
+      final captured = first.capturedBallIndex;
+      expect(captured, isNotNull);
       final state = first.exportState();
-      expect(state.seatedBallIndex, 3);
+      expect(state.seatedBallIndex, captured);
       expect(state.chamberPositions.length, 4);
 
       final second = WhoPaysLotterySimulation(
         personCount: 4,
-        winnerIndex: 1,
         seed: 9,
         initialState: state,
       );
@@ -574,24 +529,20 @@ void main() {
         WhoPaysLotterySimulation.redrawDurationMilliseconds,
       );
       expect(second.durationSeconds, closeTo(3.85, 1e-9));
-      expect(second.renderPositions[3], const Offset(0, 209));
+      expect(second.renderPositions[captured!], const Offset(0, 209));
       for (var index = 0; index < 4; index++) {
-        if (index == 3) continue;
+        if (index == captured) continue;
         expect(second.renderPositions[index], state.chamberPositions[index]);
       }
     });
 
     test('the intake ball is pulled back into the chamber', () {
-      final first = WhoPaysLotterySimulation(
-        personCount: 6,
-        winnerIndex: 0,
-        seed: 31337,
-      );
+      final first = WhoPaysLotterySimulation(personCount: 6, seed: 31337);
       _advanceInFrames(first, first.durationSeconds);
+      final intakeIndex = first.capturedBallIndex!;
 
       final second = WhoPaysLotterySimulation(
         personCount: 6,
-        winnerIndex: 4,
         seed: 555,
         initialState: first.exportState(),
       );
@@ -602,7 +553,7 @@ void main() {
 
       _advanceInFrames(second, 0.40);
       expect(
-        second.renderPositions[0].dy,
+        second.renderPositions[intakeIndex].dy,
         lessThan(WhoPaysLotterySimulation.tubeEntryY),
         reason: 'intake ball should be back in the chamber',
       );
@@ -613,18 +564,15 @@ void main() {
 
     for (var personCount = 2; personCount <= 6; personCount++) {
       for (final seed in const <int>[11, 7302]) {
-        test('redraw $personCount/$seed seats the new winner cleanly', () {
+        test('redraw $personCount/$seed captures and seats a ball cleanly', () {
           final first = WhoPaysLotterySimulation(
             personCount: personCount,
-            winnerIndex: seed % personCount,
             seed: seed,
           );
           _advanceInFrames(first, first.durationSeconds);
 
-          final winnerIndex = (seed + 1) % personCount;
           final second = WhoPaysLotterySimulation(
             personCount: personCount,
-            winnerIndex: winnerIndex,
             seed: seed * 31,
             initialState: first.exportState(),
           );
@@ -635,10 +583,11 @@ void main() {
             target = math.min(target + 1 / 60, second.durationSeconds);
             second.advanceTo(target);
             // Rotor-active phases (intake + spin-up/mixing/settling): a
-            // full-speed blade strike can legitimately move a ball ~25 px in
-            // one frame — not a teleport. After the rotor stops, constraint
-            // projection is the only jump source, so the tight bound applies.
-            final bound = target < second.settlingEndSeconds ? 32.0 : 24.0;
+            // full-speed blade strike or a deep-overlap resolution can
+            // legitimately move a ball ~25-33 px in one frame — not a
+            // teleport. After the rotor stops, constraint projection is the
+            // only jump source, so the tight bound applies.
+            final bound = target < second.settlingEndSeconds ? 34.0 : 24.0;
             for (var index = 0; index < personCount; index++) {
               final jump =
                   (second.renderPositions[index] - previous[index]).distance;
@@ -655,57 +604,97 @@ void main() {
 
           expect(second.phase, WhoPaysLotteryPhase.seated);
           expect(second.gateProgress, 0);
-          expect(second.renderPositions[winnerIndex], const Offset(0, 209));
+          final captured = second.capturedBallIndex;
+          expect(captured, isNotNull);
+          expect(second.renderPositions[captured!], const Offset(0, 209));
         });
       }
     }
 
-    test('winner neutrality also holds during a redraw intake', () {
-      final first = WhoPaysLotterySimulation(
-        personCount: 5,
-        winnerIndex: 2,
-        seed: 640,
-      );
+    test('neutrality also holds during a redraw intake', () {
+      final first = WhoPaysLotterySimulation(personCount: 5, seed: 640);
       _advanceInFrames(first, first.durationSeconds);
 
       final second = WhoPaysLotterySimulation(
         personCount: 5,
-        winnerIndex: 2, // aynı top üst üste kazanabilir
         seed: 641,
         initialState: first.exportState(),
       );
       _advanceInFrames(second, second.settlingEndSeconds - 0.001);
-      expect(second.winnerGuideApplications, 0);
+      expect(second.capturedBallIndex, isNull);
+      expect(second.targetedForceApplications, 0);
       _advanceInFrames(second, second.durationSeconds);
-      expect(second.renderPositions[2], const Offset(0, 209));
+      final captured = second.capturedBallIndex;
+      expect(captured, isNotNull);
+      expect(second.renderPositions[captured!], const Offset(0, 209));
     });
 
+    // Adalet: kazanan artık seed + kaotik karışımın fonksiyonu. Sabit seed
+    // listesiyle deterministik; bant gevşektir (gerçek tekdüzelikte ~4σ) ki
+    // test flaky olmasın. 2026-07-22 taraması (600×{2,3,4,6}): tüm paylar
+    // 1/n'in 0.85-1.13 katı bandındaydı.
+    test('capture outcomes are distributed fairly across players', () {
+      for (final personCount in [2, 6]) {
+        final wins = List<int>.filled(personCount, 0);
+        for (var seed = 1; seed <= 240; seed++) {
+          final simulation = WhoPaysLotterySimulation(
+            personCount: personCount,
+            seed: seed,
+          );
+          var target = 0.0;
+          while (target < simulation.durationSeconds - 1e-9) {
+            target = math.min(
+              target + 1 / 60,
+              simulation.durationSeconds,
+            );
+            simulation.advanceTo(target);
+          }
+          wins[simulation.capturedBallIndex!]++;
+        }
+        final expected = 240 / personCount;
+        for (var index = 0; index < personCount; index++) {
+          expect(
+            wins[index],
+            greaterThan((expected * 0.45).floor()),
+            reason: 'player $index wins too rarely for n=$personCount: $wins',
+          );
+          expect(
+            wins[index],
+            lessThan((expected * 1.75).ceil()),
+            reason: 'player $index wins too often for n=$personCount: $wins',
+          );
+        }
+      }
+    }, timeout: const Timeout(Duration(minutes: 5)));
+
     test('reduced motion honours the initial state', () {
-      final first = WhoPaysLotterySimulation(
-        personCount: 4,
-        winnerIndex: 0,
-        seed: 12321,
-      );
+      final first = WhoPaysLotterySimulation(personCount: 4, seed: 12321);
       _advanceInFrames(first, first.durationSeconds);
+      final previousWinner = first.capturedBallIndex!;
 
       final second = WhoPaysLotterySimulation(
         personCount: 4,
-        winnerIndex: 2,
         seed: 5,
         initialState: first.exportState(),
       );
       second.advanceReducedMotion(0);
-      expect(second.renderPositions[0], const Offset(0, 209));
+      expect(second.renderPositions[previousWinner], const Offset(0, 209));
 
       second.advanceReducedMotion(1);
       expect(second.phase, WhoPaysLotteryPhase.seated);
       expect(second.gateProgress, 0);
-      expect(second.renderPositions[2], const Offset(0, 209));
-      expect(
-        second.renderPositions[0].distance,
-        lessThanOrEqualTo(WhoPaysLotterySimulation.maxBallCenterRadius + 0.001),
-        reason: 'previous winner must end up back inside the chamber',
-      );
+      final captured = second.capturedBallIndex;
+      expect(captured, isNotNull);
+      expect(second.renderPositions[captured!], const Offset(0, 209));
+      if (previousWinner != captured) {
+        expect(
+          second.renderPositions[previousWinner].distance,
+          lessThanOrEqualTo(
+            WhoPaysLotterySimulation.maxBallCenterRadius + 0.001,
+          ),
+          reason: 'previous winner must end up back inside the chamber',
+        );
+      }
     });
   });
 }

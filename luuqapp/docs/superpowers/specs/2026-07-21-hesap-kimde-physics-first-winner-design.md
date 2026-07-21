@@ -150,3 +150,36 @@ Kullanıcının istediği mekanizma: **gerçekten deliğe giren top kazansın.**
 | Endeks yanlılığı (adalet) | ≥ 600 çekilişlik ölçüm; gerekirse seed'li dizilim karıştırma. |
 | Reduced-motion iç koşumu ile normal koşumun ayrışması | Aynı kod yolu, aynı sabit adım; test: aynı seed'de iki yol aynı kazananı verir. |
 | Erken düşüşte kapağın topu kesmesi | Mevcut winner-aware kapanış capturedIndex ile aynen; 12-senaryo testi korunur. |
+
+---
+
+## Addendum (2026-07-22): Adalet taraması sonuçları
+
+Enstrümante tarama (600 taze çekiliş × {2,3,4,6} kişi + 300 redraw × {2,6}):
+
+- Taze: n=2 [290,310] · n=3 [189,210,201] · n=4 [158,151,141,150] ·
+  n=6 [94,108,113,107,85,93]. Tüm paylar 1/n'in 0.85-1.13 katı — 0.55-1.6
+  bandının rahat içinde. **Dizilim karıştırma gerekmedi.**
+- Redraw: n=2 [146,154] · n=6 [52,54,53,49,45,47] — dengeli.
+- Kalıcı gevşek test eklendi (240 seed × {2,6}, bant 0.45-1.75).
+- Yan bulgu: son-çare bölgesine (atama ≥ 2.895 sn) sarkan çekiliş oranı
+  kişi sayısıyla ters orantılı: n=2 %46, n=3 %29, n=4 %18, n=6 %6 (redraw
+  n=2 %81). Az topta çökme yetersiz — kapak açıldığında toplar hâlâ yüksekte.
+  Kalite geçişinin (Task 4) ana hedefi.
+
+## Addendum (2026-07-22): Kalite geçişi sonuçları
+
+120 koşuluk kalite taraması (40 seed × {2,4,6}):
+
+- Kapak-top kesmesi 0, ikinci tüp girişi 0, merkezden kesme 0, duraksama 0.
+- Konma hızı p50=210 / p90=235 / max=253 px/s (yumuşak iniş korundu).
+- Oturma zamanı p50=3.15 / p90=3.32 sn.
+- Ayarlar: çökme yerçekimi yardımı atamaya dek sürer; nötr drenaj %30 taban
+  güçle başlar; son-çare transiti düz yay yerine duvar-sarmal rota kullanır
+  (radyal yay + teğetsel süpürme, transitNearMouthAngle=0.45,
+  transitSweepStrength=4200) — top merkezden kestirme geçemez.
+- Bilinçli kabul: az toplu çekilişlerde (n=2 ~%45, n=3 ~%28) atama son-çare
+  bölgesine sarkar — karışım sonu yüksekte kalan toplar 0.35 sn'de tabana
+  fiziksel olarak inemez; faz süreleri spec ile sabit. Görsel maliyeti yok:
+  seçilen top yine ağza en yakın olandır ve camdan kayarak iner
+  (merkezden kesme 0/120 ile doğrulandı).
