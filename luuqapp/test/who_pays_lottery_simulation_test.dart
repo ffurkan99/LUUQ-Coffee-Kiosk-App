@@ -305,6 +305,41 @@ void main() {
       }
     }
 
+    // Kapak, tüpten inen topun üstünden kapanamaz: kapanış süpürmesi
+    // sırasında kazanan çubuğun süpürme bandında (dy 112-154) olamaz.
+    for (final seed in const <int>[1, 97, 5000, 977351]) {
+      for (final personCount in const <int>[2, 4, 6]) {
+        test('gate never closes through the winner ($personCount/$seed)', () {
+          final winnerIndex = seed % personCount;
+          final simulation = WhoPaysLotterySimulation(
+            personCount: personCount,
+            winnerIndex: winnerIndex,
+            seed: seed,
+          );
+
+          var target = 0.0;
+          double? previousGate;
+          while (target < simulation.durationSeconds) {
+            target = math.min(target + 1 / 60, simulation.durationSeconds);
+            simulation.advanceTo(target);
+            final gate = simulation.gateProgress;
+            final closing =
+                previousGate != null && gate < previousGate && gate > 0;
+            previousGate = gate;
+            if (!closing) continue;
+            final winner = simulation.renderPositions[winnerIndex];
+            expect(
+              winner.dy > 112 && winner.dy < 154,
+              isFalse,
+              reason:
+                  'gate sweeps through the winner at '
+                  '${target.toStringAsFixed(2)}s (dy=${winner.dy.toStringAsFixed(0)})',
+            );
+          }
+        });
+      }
+    }
+
     // Yakalama koreografisi: kazanan top ağza kuş uçuşu süzülmek yerine önce
     // cama yaslanıp fanusun eğrisi boyunca kayarak iner. Bu, topun merkezden
     // (ve duran rotor kanatlarının içinden) kestirme geçmesini yasaklar.
@@ -320,10 +355,17 @@ void main() {
               seed: seed,
             );
 
+            // Pencere tüm yakalamayı kapsar (son-çare dönemi dahil): kazanan
+            // tüpe girene dek merkezden kestirme YOK — düz-hat çekişi hiçbir
+            // aşamada geri dönemez.
             var target = 0.0;
-            while (target < 2.88) {
-              target = math.min(target + 1 / 60, 2.88);
+            var winnerEnteredTube = false;
+            while (target < 3.30 && !winnerEnteredTube) {
+              target = math.min(target + 1 / 60, 3.30);
               simulation.advanceTo(target);
+              winnerEnteredTube =
+                  simulation.renderPositions[winnerIndex].dy >=
+                  WhoPaysLotterySimulation.tubeEntryY + 10;
               if (target < 2.62) continue;
               final winner = simulation.renderPositions[winnerIndex];
               final nearMouth = (math.pi / 2 - winner.direction).abs() <= 0.55;
