@@ -233,3 +233,14 @@ top"tur (kaybeden kenara itilir, aktarılan hız `plowKickCap` 320 px/s ile
 sınırlı). Yeni invariant testi: kazanan yakalama boyunca duvara yakın kalır
 (r ≥ 85 / tüpte / ağız bölgesinde) — merkezden ve duran rotor kanatlarının
 içinden kestirme geçemez.
+
+Aynı gün, sinematik pürüzler (kod-içi kinematik taramayla ölçülerek):
+karışım sonrası tüm toplara düşey terminal hız (`postMixTerminalFallSpeed`
+560 px/s — fanus yüksekliğinden serbest düşüş ~494 üretir), kazanana
+yakalama boyunca hız tavanı (`winnerCaptureMaxSpeed` 540), yuvadan önce
+40 px'lik iniş yastığı (`seatCushionZone`/`seatCushionDragRate` — çarpış
+~550'den ~180 px/s'e indi, tek karede durma kalktı) ve karışım sonrası
+çakışma/kanat ayrıştırma itmelerine kare başına 5 px tavan eklendi.
+Rotor yavaşlarken kanadın topa hızlı vurması bilinçli olarak korunur —
+ekranda nedeni görünen meşru fiziktir (ışınlanma-yok testinin rotor-aktif
+32 px sınırı içinde).
