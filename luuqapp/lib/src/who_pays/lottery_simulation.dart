@@ -161,6 +161,18 @@ class WhoPaysLotterySimulation {
   static const double seatCushionZone = 40.0;
   static const double seatCushionDragRate = 12.0;
 
+  /// Kapak sırtı: kapak bölgesi hafif bir tümsek gibi davranır — hiçbir top
+  /// deliğin tam üstünde park edip "asıl düşecek top" görüntüsü veremez.
+  /// Karışım sonrası herkese eşit uygulanır (tarafsızlık korunur); yakalama
+  /// başlayınca kazanan muaf tutulur ki ağza girebilsin.
+  static const double gateRidgeTopY = 84.0;
+  static const double gateRidgeHalfWidth = 40.0;
+  static const double gateRidgeStrength = 900.0;
+
+  /// Ağız kutusunun yarı genişliği (px): bu bandın içinde (dy >
+  /// gateRidgeTopY+8) hiçbir top dinlenemez — geometrik tahliye uygulanır.
+  static const double mouthKeepoutHalfWidth = 34.0;
+
   /// Karışım sonrası çakışma ayrıştırmasının kare başına konum itmesi
   /// tavanı (px) — derin binmelerde tek karelik "zıplama" görüntüsünü
   /// birkaç kareye yayar.
@@ -221,6 +233,10 @@ class WhoPaysLotterySimulation {
   WhoPaysLotteryPhase phase = WhoPaysLotteryPhase.idle;
 
   double _accumulator = 0;
+  late final List<double> _ridgeShiftBudget = List<double>.filled(
+    personCount,
+    0,
+  );
 
   /// Cumulative physical blade/hub impacts. Used by focused tests and local
   /// diagnostics to prove that mixing energy comes from rotor contact.
@@ -504,6 +520,23 @@ class WhoPaysLotterySimulation {
         );
         dragRate = settling ? settleDragRate : mixingDragRate;
 
+        // Kapak sırtı (bkz. gateRidge* sabitleri): karışım sonrası ağız
+        // üstüne inen top yana kaydırılır. Kazanan yakalamadan itibaren,
+        // intake topu tüp yolculuğu boyunca muaftır.
+        final ridgeActive =
+            drawTime >= _mixingEnd &&
+            !(isWinner && capturing) &&
+            !(index == _intakeBallIndex && !_intakeReleased && _phaseShift > 0);
+        if (ridgeActive &&
+            ball.position.dy > gateRidgeTopY &&
+            ball.position.dx.abs() < gateRidgeHalfWidth) {
+          final side = ball.position.dx.abs() > 0.5
+              ? ball.position.dx.sign
+              : (index.isEven ? 1.0 : -1.0);
+          final falloff = 1 - ball.position.dx.abs() / gateRidgeHalfWidth;
+          acceleration += Offset(side * gateRidgeStrength * falloff, 0);
+        }
+
         if (isWinner && capturing) {
           dragRate = winnerCaptureDragRate;
           final ramp =
@@ -592,6 +625,14 @@ class WhoPaysLotterySimulation {
         // line.
         _intakeReleased = true;
       }
+    }
+
+    // Kapak sırtı tahliye bütçesi: her top adım başına en fazla
+    // postMixSeparationCap kadar yana kaydırılabilir; bütçe pass'ler
+    // arasında paylaşılır ki tahliye 8 pass'te katlanmasın ama yarattığı
+    // çakışmalar aynı adımın kalan pass'lerinde çözülebilsin.
+    for (var i = 0; i < _ridgeShiftBudget.length; i++) {
+      _ridgeShiftBudget[i] = postMixSeparationCap;
     }
 
     var maxImpactSpeed = 0.0;
@@ -860,6 +901,34 @@ class WhoPaysLotterySimulation {
             ..velocity = Offset.zero;
         }
         continue;
+      }
+
+      // Kapak sırtı geometrisi: karışım sonrası ağız kutusu dinlenilemez —
+      // içine oturan top, adım-bütçesi dahilinde yana tahliye edilir
+      // (tümsekten kayma gibi). Pass döngüsü içinde çalıştığı için
+      // yarattığı çakışmalar aynı adımda çözülür. Kazanan yakalamadan
+      // itibaren, intake topu prolog boyunca muaftır.
+      final ridgeExempt =
+          (index == winnerIndex && drawTime >= _settlingEnd) ||
+          (index == _intakeBallIndex && _phaseShift > 0 && drawTime < 0);
+      if (drawTime >= _mixingEnd &&
+          !ridgeExempt &&
+          _ridgeShiftBudget[index] > 0 &&
+          ball.position.dy > gateRidgeTopY &&
+          ball.position.dx.abs() < mouthKeepoutHalfWidth) {
+        final side = ball.position.dx.abs() > 0.5
+            ? ball.position.dx.sign
+            : (index.isEven ? 1.0 : -1.0);
+        final needed = mouthKeepoutHalfWidth - ball.position.dx.abs();
+        final shift = min(_ridgeShiftBudget[index], needed);
+        _ridgeShiftBudget[index] -= shift;
+        ball.position = Offset(
+          ball.position.dx + side * shift,
+          ball.position.dy,
+        );
+        if (ball.velocity.dx.sign != side) {
+          ball.velocity = Offset(ball.velocity.dx * 0.3, ball.velocity.dy);
+        }
       }
 
       final distance = ball.position.distance;
