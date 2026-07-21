@@ -240,11 +240,7 @@ void main() {
             );
           }
 
-          for (
-            var first = 0;
-            first < simulation.personCount;
-            first++
-          ) {
+          for (var first = 0; first < simulation.personCount; first++) {
             if (first == winnerIndex) continue;
             for (
               var second = first + 1;
@@ -264,6 +260,44 @@ void main() {
             }
           }
         });
+      }
+    }
+
+    // Yakalama koreografisi: kazanan top ağza kuş uçuşu süzülmek yerine önce
+    // cama yaslanıp fanusun eğrisi boyunca kayarak iner. Bu, topun merkezden
+    // (ve duran rotor kanatlarının içinden) kestirme geçmesini yasaklar.
+    for (final seed in const <int>[1, 97, 5000, 977351]) {
+      for (final personCount in const <int>[2, 6]) {
+        test(
+          'winner hugs the glass while being captured ($personCount/$seed)',
+          () {
+            final winnerIndex = seed % personCount;
+            final simulation = WhoPaysLotterySimulation(
+              personCount: personCount,
+              winnerIndex: winnerIndex,
+              seed: seed,
+            );
+
+            var target = 0.0;
+            while (target < 2.88) {
+              target = math.min(target + 1 / 60, 2.88);
+              simulation.advanceTo(target);
+              if (target < 2.62) continue;
+              final winner = simulation.renderPositions[winnerIndex];
+              final nearMouth = (math.pi / 2 - winner.direction).abs() <= 0.55;
+              final onWall = winner.distance >= 85;
+              final inTube = winner.dy >= WhoPaysLotterySimulation.tubeEntryY;
+              expect(
+                onWall || inTube || nearMouth,
+                isTrue,
+                reason:
+                    'winner cut through the chamber at '
+                    '${target.toStringAsFixed(2)}s '
+                    '(r=${winner.distance.toStringAsFixed(1)})',
+              );
+            }
+          },
+        );
       }
     }
 
