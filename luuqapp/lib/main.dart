@@ -4732,6 +4732,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
+        key: const ValueKey('who_pays_card'),
         width: 480,
         padding: const EdgeInsets.all(40),
         decoration: BoxDecoration(
@@ -4979,107 +4980,116 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
 
             const SizedBox(height: 32),
 
-            // Spin button & Result
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: (_result != null && !_isAnimating)
-                  ? Column(
-                      key: ValueKey(_result),
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 20,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _bgDark,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: _gold.withValues(alpha: 0.5),
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _gold.withValues(alpha: 0.15),
-                                blurRadius: 20,
+            // Spin button & Result. Sabit yükseklik: sonuç durumu (kutu +
+            // "Tekrar Çek") en uzun içeriktir; bölge her durumda onun
+            // boyunda kalır ki kart, durumlar arasında büyüyüp görsel kayma
+            // yaratmasın.
+            SizedBox(
+              height: 142,
+              child: Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: (_result != null && !_isAnimating)
+                      ? Column(
+                          key: ValueKey(_result),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                                vertical: 20,
                               ),
-                            ],
-                          ),
-                          child: Text(
-                            tr(
-                              'Hesap $_result. kişide! 🎉',
-                              'Person $_result pays the bill! 🎉',
-                            ),
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              color: _playerColors[_result! - 1],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        BouncyButton(
-                          onTap: _spin,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            child: Text(
-                              tr('Tekrar Çek', 'Draw Again'),
-                              style: TextStyle(
-                                color: _mint,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1,
+                              decoration: BoxDecoration(
+                                color: _bgDark,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: _gold.withValues(alpha: 0.5),
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _gold.withValues(alpha: 0.15),
+                                    blurRadius: 20,
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                tr(
+                                  'Hesap $_result. kişide! 🎉',
+                                  'Person $_result pays the bill! 🎉',
+                                ),
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
+                                  color: _playerColors[_result! - 1],
+                                ),
                               ),
                             ),
+                            const SizedBox(height: 8),
+                            BouncyButton(
+                              onTap: _spin,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
+                                ),
+                                child: Text(
+                                  tr('Tekrar Çek', 'Draw Again'),
+                                  style: TextStyle(
+                                    color: _mint,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Semantics(
+                          key: const ValueKey('spin_btn'),
+                          button: true,
+                          enabled: !_isAnimating,
+                          label: tr(
+                            'Topları karıştır ve sonucu seç',
+                            'Mix balls and draw',
                           ),
-                        ),
-                      ],
-                    )
-                  : Semantics(
-                      key: const ValueKey('spin_btn'),
-                      button: true,
-                      enabled: !_isAnimating,
-                      label: tr(
-                        'Topları karıştır ve sonucu seç',
-                        'Mix balls and draw',
-                      ),
-                      child: BouncyButton(
-                        onTap: _isAnimating ? null : _spin,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 48,
-                            vertical: 18,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _isAnimating ? _muted : _mint,
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: _isAnimating
-                                ? []
-                                : [
-                                    BoxShadow(
-                                      color: _mint.withValues(alpha: 0.4),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                  ],
-                          ),
-                          child: Text(
-                            _isAnimating
-                                ? tr('KARILIYOR...', 'MIXING...')
-                                : tr('KARIŞTIR & ÇEK!', 'MIX & DRAW!'),
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              color: _bgDark,
-                              letterSpacing: 2,
+                          child: BouncyButton(
+                            onTap: _isAnimating ? null : _spin,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 48,
+                                vertical: 18,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _isAnimating ? _muted : _mint,
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: _isAnimating
+                                    ? []
+                                    : [
+                                        BoxShadow(
+                                          color: _mint.withValues(alpha: 0.4),
+                                          blurRadius: 16,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                              ),
+                              child: Text(
+                                _isAnimating
+                                    ? tr('KARILIYOR...', 'MIXING...')
+                                    : tr('KARIŞTIR & ÇEK!', 'MIX & DRAW!'),
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  color: _bgDark,
+                                  letterSpacing: 2,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
 
@@ -5248,8 +5258,7 @@ class _LotteryMachineState extends State<_LotteryMachine>
 
   @override
   Widget build(BuildContext context) {
-    final seatedWinner =
-        _simulation.phase == WhoPaysLotteryPhase.seated
+    final seatedWinner = _simulation.phase == WhoPaysLotteryPhase.seated
         ? _simulation.capturedBallIndex
         : null;
     return Semantics(

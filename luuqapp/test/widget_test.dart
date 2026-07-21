@@ -144,6 +144,38 @@ void main() {
     _disableLicensedKiosk();
   });
 
+  testWidgets('who pays dialog keeps one size across draw states', (
+    WidgetTester tester,
+  ) async {
+    _enableLicensedKiosk();
+    await _pumpKioskAtSize(tester, const Size(1920, 1080));
+    await _openWhoPaysDialog(tester);
+
+    // Alt bölge (buton/sonuç) durumlar arasında farklı içerik gösterir;
+    // kartın yüksekliği yine de sabit kalmalı — sonuç açıklanınca kart
+    // büyüyüp görsel kayma yaratamaz.
+    final card = find.byKey(const ValueKey('who_pays_card'));
+    final idleSize = tester.getSize(card);
+
+    await tester.tap(find.text('KARIŞTIR & ÇEK!'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('KARILIYOR...'), findsOneWidget);
+    expect(tester.getSize(card), idleSize);
+
+    await tester.pump(
+      Duration(
+        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('Tekrar Çek'), findsOneWidget);
+    expect(tester.getSize(card), idleSize);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    _disableLicensedKiosk();
+  });
+
   testWidgets('who pays locks controls and supports six-player redraw', (
     WidgetTester tester,
   ) async {
