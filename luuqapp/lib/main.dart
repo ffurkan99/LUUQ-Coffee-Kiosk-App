@@ -13722,8 +13722,10 @@ class _UpdateDialogState extends State<_UpdateDialog>
 
       _changeState(UpdateState.readyToInstall);
 
-      // This install remains part of the PIN-authorized download action.
-      await _runInstallFlow(file.path);
+      // Deliberately no auto-install here: the admin chooses between
+      // "Kurulumu Başlat" (PIN-gated via _downloadAndInstall) and
+      // "Daha Sonra". The verified APK is persisted above, so a later
+      // dialog open revalidates it and offers the install again.
     } on ApkDownloadCancelledException {
       AnalyticsService.instance.trackEvent(
         AnalyticsEvent(eventType: 'update_download_cancelled', screen: 'home'),
