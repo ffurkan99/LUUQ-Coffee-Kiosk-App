@@ -256,3 +256,14 @@ yakalamadan itibaren, intake topu prolog boyunca muaftır; karışım öncesi
 herkes eşit — tarafsızlık testli). "Park" tanımı testte kalıcılıktır
 (kutuda ≥9 ardışık kare); kazananın buldozeri kaybedeni bir anlığına ağız
 üstünden süpürebilir — bu geçiş meşru fiziktir.
+
+Aynı gün, 120 koşuluk kalite taraması sonrası: kapak kapanışı
+kazanan-farkındalıklı yapıldı — kapanış en erken 3.10'da VE kazanan çubuğun
+süpürme bandını (dy ≥ `gateSweepClearY` 158) geçtikten sonra başlar,
+`_gateCloseLength` (0.14 sn) sürer; böylece kapak tüpten inen topun
+üstünden asla geçemez (öncesinde koşuların %41'inde çubuk topu kesiyordu;
+12 senaryoluk kalıcı test eklendi, taramada 0/120). Duvar-sadakat
+invariantı tüm yakalamayı (son-çare dönemi dahil) kapsayacak şekilde
+genişletildi. Süpürme tabanı %35→%50, iniş yastığı 36 px/11 (konma ~240
+px/s). Kalan bilinen kuyruk: koşuların ~%13'ünde top yuvaya donma karesine
+yakın oturur (dinlenme anı kısa) — kabul edilmiş sınır.

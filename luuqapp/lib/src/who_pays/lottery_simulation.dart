@@ -77,8 +77,12 @@ class WhoPaysLotterySimulation {
   static const double _droppingEnd = 3.32;
   static const double _idleDuration = 3.40;
   static const double _gateOpenLength = 0.15;
+  // Kapanış kazanan-farkındalıklıdır: en erken _gateCloseStart'ta VE kazanan
+  // çubuğun süpürme bandını (dy < gateSweepClearY) geçtikten sonra başlar —
+  // kapak, tüpten inen topun üstünden kapanamaz.
   static const double _gateCloseStart = 3.10;
-  static const double _gateCloseEnd = 3.30;
+  static const double _gateCloseLength = 0.14;
+  static const double gateSweepClearY = 158.0;
   // Son-çare penceresi: duvar-sarmal emiş topu zamanında getiremezse son
   // 100 ms'de düz yay devreye girer. Ana teslimatçı duvar-sarmal kuvvettir.
   static const double _guaranteeWindow = 0.10;
@@ -158,8 +162,8 @@ class WhoPaysLotterySimulation {
 
   /// Yuvadan önce ağır sönümleme uygulanan bant (px) ve sönümleme oranı —
   /// yumuşak konma için.
-  static const double seatCushionZone = 40.0;
-  static const double seatCushionDragRate = 12.0;
+  static const double seatCushionZone = 36.0;
+  static const double seatCushionDragRate = 11.0;
 
   /// Kapak sırtı: kapak bölgesi hafif bir tümsek gibi davranır — hiçbir top
   /// deliğin tam üstünde park edip "asıl düşecek top" görüntüsü veremez.
@@ -220,6 +224,11 @@ class WhoPaysLotterySimulation {
   // tamamlar ve kaybedenler dondurulmadan önce tabana inebilsin diye
   // iniş yardımı devralır.
   bool _winnerReachedTube = false;
+
+  // Kapanışın başladığı mutlak an (sn). Kazanan süpürme bandını geçince
+  // (en erken _gateCloseStart'ta) atanır; zaman çizelgesi sonunda hâlâ
+  // atanmadıysa son-kare garantisi kapatır.
+  double? _gateCloseBeganAt;
 
   final List<WhoPaysBallState> balls = <WhoPaysBallState>[];
   final List<Offset> renderPositions = <Offset>[];
@@ -322,6 +331,14 @@ class WhoPaysLotterySimulation {
       physicsSteps++;
     }
 
+    // Kazanan-farkındalıklı kapanış tetiği: en erken _gateCloseStart'ta VE
+    // kazanan çubuğun süpürme bandını geçtikten sonra.
+    if (_gateCloseBeganAt == null &&
+        target - _phaseShift >= _gateCloseStart &&
+        balls[winnerIndex].position.dy >= gateSweepClearY) {
+      _gateCloseBeganAt = timelineSeconds;
+    }
+
     // A background/resume jump is deliberately not fully simulated. If the
     // controller has already completed, guarantee a valid in-app result rather
     // than leaving the selected ball suspended in the glass.
@@ -329,10 +346,12 @@ class WhoPaysLotterySimulation {
       balls[winnerIndex]
         ..position = const Offset(0, winnerSeatY)
         ..velocity = Offset.zero;
+      _gateCloseBeganAt ??= timelineSeconds - _gateCloseLength;
       if (droppedCatchUp) {
         _settleLosersToFloor();
       }
     }
+    gateProgress = _gateProgressAt(target);
 
     _updatePresentation();
     return WhoPaysStepReport(
@@ -569,8 +588,8 @@ class WhoPaysLotterySimulation {
             final wallSpring =
                 radial * ((maxBallCenterRadius - distance) * suctionSpringRate);
             // Taban güç: uzak duvardan başlayan toplar da pencere içinde
-            // yetişsin diye süpürme sıfırdan değil %35 güçten başlar.
-            final sweepStrength = suctionRampMax * (0.35 + 0.65 * ramp);
+            // yetişsin diye süpürme sıfırdan değil %50 güçten başlar.
+            final sweepStrength = suctionRampMax * (0.5 + 0.5 * ramp);
             final sweep =
                 Offset(-radial.dy, radial.dx) *
                 angleToMouth.sign *
@@ -580,7 +599,7 @@ class WhoPaysLotterySimulation {
 
           final limit = inGuarantee
               ? suctionGuaranteeMax
-              : suctionRampMax * (0.35 + 0.65 * ramp);
+              : suctionRampMax * (0.5 + 0.5 * ramp);
           acceleration += _clampMagnitude(pull, limit);
           winnerGuideApplications++;
         } else if (!isWinner &&
@@ -1073,14 +1092,12 @@ class WhoPaysLotterySimulation {
     if (t < _settlingEnd + _gateOpenLength) {
       return _smoothStep((t - _settlingEnd) / _gateOpenLength);
     }
-    if (t < _gateCloseStart) return 1;
-    if (t < _gateCloseEnd) {
-      return 1 -
-          _smoothStep(
-            (t - _gateCloseStart) / (_gateCloseEnd - _gateCloseStart),
-          );
-    }
-    return 0;
+    final closeBeganAt = _gateCloseBeganAt;
+    if (closeBeganAt == null) return 1;
+    final closeProgress = (seconds - closeBeganAt) / _gateCloseLength;
+    if (closeProgress <= 0) return 1;
+    if (closeProgress >= 1) return 0;
+    return 1 - _smoothStep(closeProgress);
   }
 
   static Offset _closestPointOnSegment(Offset point, Offset start, Offset end) {
