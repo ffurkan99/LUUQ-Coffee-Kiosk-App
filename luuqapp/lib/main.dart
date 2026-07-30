@@ -337,8 +337,6 @@ class _SpinTickSound {
     unawaited(_playResult());
   }
 
-  void stop() {}
-
   Future<void> _playTick() async {
     try {
       if (Platform.isAndroid || Platform.isWindows) {
@@ -1651,7 +1649,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     appThemeNotifier.removeListener(_handleThemeChange);
     appVolumeNotifier.removeListener(_handleVolumeChange);
     WidgetsBinding.instance.removeObserver(this);
-    _spinSound.stop();
     _spinController.dispose();
     _pulseController.dispose();
     _videoController?.dispose();
@@ -1687,19 +1684,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     if (mounted) {
       setState(() {});
     }
-  }
-
-  void _toggleMood(DrinkMood mood) {
-    if (_spinController.isAnimating) return;
-    setState(() {
-      _showResult = false;
-      if (_selectedMood == mood) {
-        _selectedMood = null;
-      } else {
-        _selectedMood = mood;
-      }
-    });
-    _resetIdleTimer();
   }
 
   void _handleSpinFrame() {
@@ -1794,7 +1778,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     _startWheelCollisionTracking(available, _spinController.value);
 
     _spinController.animateTo(targetTurns, curve: curve).whenComplete(() {
-      _spinSound.stop();
       if (!mounted) return;
       setState(() {
         _selectedDrink = nextDrink;
@@ -3010,119 +2993,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     );
   }
 
-  // ignore: unused_element
-  Widget _buildFilterArea() {
-    final isCompact = MediaQuery.sizeOf(context).width < 700;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(isCompact ? 16 : 24),
-      decoration: BoxDecoration(
-        color: _surface.withValues(alpha: 0.25),
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 20),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.tune_rounded, color: _gold, size: isCompact ? 24 : 32),
-              const SizedBox(width: 12),
-              Text(
-                tr('DAMAK MODU', 'TASTE MODE'),
-                style: TextStyle(
-                  fontSize: isCompact ? 20 : 28,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
-                  color: _gold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            tr(
-              'Damak modunu seç, çarkı çevir, içeceğini keşfet.',
-              'Choose your mood, spin the wheel, discover your drink.',
-            ),
-            style: TextStyle(
-              fontSize: 18,
-              color: _mutedText,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth < 420 ? 2 : 3;
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                shrinkWrap: true,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: isCompact ? 2.45 : 2.2,
-                physics: const NeverScrollableScrollPhysics(),
-                children: DrinkMood.values.map((mood) {
-                  final isSelected = _selectedMood == mood;
-                  return BouncyButton(
-                    onTap: () => _toggleMood(mood),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? _gold
-                            : _bgDark.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected
-                              ? _cream
-                              : Colors.white.withValues(alpha: 0.05),
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            mood.icon,
-                            size: isCompact ? 19 : 24,
-                            color: isSelected ? _bgDark : _cream,
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                mood.label,
-                                maxLines: 1,
-                                style: TextStyle(
-                                  color: isSelected ? _bgDark : _cream,
-                                  fontSize: isCompact ? 15 : 18,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w900
-                                      : FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCenterArea(List<Drink> available, bool isSpinning) {
     final isCompact = MediaQuery.sizeOf(context).width < 700;
     if (available.isEmpty) {
@@ -3342,27 +3212,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                       size: 32,
                                                     )
                                                   : Image.asset(
-                                                      drink.imagePath!
-                                                          .replaceFirst(
-                                                            'assets/menu/png/',
-                                                            'assets/menu/',
-                                                          )
-                                                          .replaceAll(
-                                                            'assets/menu/',
-                                                            'assets/menu/png/',
-                                                          )
-                                                          .replaceAll(
-                                                            '.jpg',
-                                                            '.png',
-                                                          )
-                                                          .replaceAll(
-                                                            '.jpeg',
-                                                            '.png',
-                                                          )
-                                                          .replaceAll(
-                                                            '.webp',
-                                                            '.png',
-                                                          ),
+                                                      _wheelImagePath(
+                                                        drink.imagePath!,
+                                                      ),
                                                       fit: BoxFit.cover,
                                                       errorBuilder: (c, e, s) =>
                                                           Icon(
@@ -3854,12 +3706,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
       for (final item in [...espresso, ...hot]) {
         if (item.imagePath != null) {
-          final pngPath = item.imagePath!
-              .replaceFirst('assets/menu/png/', 'assets/menu/')
-              .replaceAll('assets/menu/', 'assets/menu/png/')
-              .replaceAll('.jpg', '.png')
-              .replaceAll('.jpeg', '.png')
-              .replaceAll('.webp', '.png');
+          final pngPath = _wheelImagePath(item.imagePath!);
 
           hotDrinks.add(
             _MenuItem(
@@ -3898,12 +3745,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         final items = _menuCategories[catName] ?? [];
         for (final item in items) {
           if (item.imagePath != null) {
-            final pngPath = item.imagePath!
-                .replaceFirst('assets/menu/png/', 'assets/menu/')
-                .replaceAll('assets/menu/', 'assets/menu/png/')
-                .replaceAll('.jpg', '.png')
-                .replaceAll('.jpeg', '.png')
-                .replaceAll('.webp', '.png');
+            final pngPath = _wheelImagePath(item.imagePath!);
 
             allDrinks.add(
               _MenuItem(
@@ -3934,12 +3776,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
       for (final item in [...pasta, ...choco]) {
         if (item.imagePath != null) {
-          final pngPath = item.imagePath!
-              .replaceFirst('assets/menu/png/', 'assets/menu/')
-              .replaceAll('assets/menu/', 'assets/menu/png/')
-              .replaceAll('.jpg', '.png')
-              .replaceAll('.jpeg', '.png')
-              .replaceAll('.webp', '.png');
+          final pngPath = _wheelImagePath(item.imagePath!);
 
           desserts.add(
             _MenuItem(
@@ -3964,12 +3801,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       final list = _menuCategories['LUUQ Kokteyl'] ?? [];
       for (final item in list) {
         if (item.imagePath != null) {
-          final pngPath = item.imagePath!
-              .replaceFirst('assets/menu/png/', 'assets/menu/')
-              .replaceAll('assets/menu/', 'assets/menu/png/')
-              .replaceAll('.jpg', '.png')
-              .replaceAll('.jpeg', '.png')
-              .replaceAll('.webp', '.png');
+          final pngPath = _wheelImagePath(item.imagePath!);
           cocktails.add(
             _MenuItem(
               item.name,
@@ -3988,69 +3820,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         isSpinning: isSpinning,
       );
     }
-  }
-
-  Widget buildResultFooter({
-    required String resultName,
-    required bool isCompact,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        horizontal: isCompact ? 16 : 20,
-        vertical: isCompact ? 14 : 16,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.045),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: isCompact ? 34 : 40,
-            height: isCompact ? 34 : 40,
-            decoration: BoxDecoration(
-              color: _mint.withValues(alpha: 0.14),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.check_rounded,
-              color: _mint,
-              size: isCompact ? 20 : 24,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tr('Seçimin hazır', 'Your pick is ready'),
-                  style: TextStyle(
-                    color: _mint,
-                    fontSize: isCompact ? 14 : 15,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  resultName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.72),
-                    fontSize: isCompact ? 12 : 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildResultVisual({
@@ -9765,7 +9534,6 @@ Drink _drinkFromMenuItem(_MenuItem item) {
     icon: item.icon,
     color: _wheelColorForMenuItem(item, category),
     moods: _wheelMoodsForMenuItem(item, category),
-    ingredients: const [],
     imagePath: item.imagePath,
   );
 }
@@ -9858,7 +9626,6 @@ class Drink {
     required this.icon,
     required this.color,
     required this.moods,
-    required this.ingredients,
     this.imagePath,
   });
 
@@ -9868,7 +9635,6 @@ class Drink {
   final IconData icon;
   final Color color;
   final Set<DrinkMood> moods;
-  final List<String> ingredients;
   final String? imagePath;
 
   @override
@@ -9895,119 +9661,6 @@ enum DrinkMood {
 
   String get label => tr(trLabel, enLabel);
 }
-
-const drinks = [
-  Drink(
-    shortName: 'Espresso',
-    fullName: 'Double Espresso',
-    description: 'İtalyan klasiği; yoğun, sert ve uyanış garantili.',
-    icon: Icons.coffee_rounded,
-    color: Color(0xFF4A3525),
-    moods: {DrinkMood.hot, DrinkMood.strong},
-    ingredients: ['Çift Shot Espresso'],
-  ),
-  Drink(
-    shortName: 'Americano',
-    fullName: 'Iced Americano',
-    description: 'Buz gibi su ve yoğun espresso. Ferahlatıcı ve net.',
-    icon: Icons.water_drop_rounded,
-    color: Color(0xFF908073),
-    moods: {DrinkMood.cold, DrinkMood.strong, DrinkMood.fresh},
-    ingredients: ['Soğuk Su', 'Buz', 'Çift Shot Espresso'],
-  ),
-  Drink(
-    shortName: 'Cappuccino',
-    fullName: 'Cappuccino',
-    description: 'Baskın espresso tadı ve bol köpüklü sıcak süt.',
-    icon: Icons.local_cafe_rounded,
-    color: Color(0xFFC49B76),
-    moods: {DrinkMood.hot, DrinkMood.strong, DrinkMood.milky},
-    ingredients: ['Espresso', 'Sıcak Süt', 'Bol Süt Köpüğü'],
-  ),
-  Drink(
-    shortName: 'Latte',
-    fullName: 'Caffe Latte',
-    description: 'Yumuşak içimli sıcak süt ve dengeli espresso.',
-    icon: Icons.emoji_food_beverage_rounded,
-    color: Color(0xFFD4B499),
-    moods: {DrinkMood.hot, DrinkMood.milky},
-    ingredients: ['Espresso', 'Sıcak Süt', 'Süt Köpüğü'],
-  ),
-  Drink(
-    shortName: 'Flat White',
-    fullName: 'Flat White',
-    description: 'İncecik süt köpüğü altında yoğun espresso deneyimi.',
-    icon: Icons.coffee_maker_rounded,
-    color: Color(0xFFB58E6D),
-    moods: {DrinkMood.hot, DrinkMood.strong, DrinkMood.milky},
-    ingredients: ['Çift Shot Espresso', 'Buharda Isıtılmış Süt'],
-  ),
-  Drink(
-    shortName: 'Macchiato',
-    fullName: 'Caramel Macchiato',
-    description: 'Vanilya şurubu, sıcak süt, espresso ve nefis karamel.',
-    icon: Icons.icecream_rounded,
-    color: Color(0xFFDDA77B),
-    moods: {DrinkMood.hot, DrinkMood.sweet, DrinkMood.milky},
-    ingredients: ['Vanilya Şurubu', 'Süt', 'Espresso', 'Karamel Sos'],
-  ),
-  Drink(
-    shortName: 'Mocha',
-    fullName: 'Caffe Mocha',
-    description: 'Tatlı çikolatanın sıcak kahveyle efsane uyumu.',
-    icon: Icons.eco_rounded,
-    color: Color(0xFF7B5E4A),
-    moods: {DrinkMood.hot, DrinkMood.sweet, DrinkMood.milky},
-    ingredients: ['Espresso', 'Çikolata Sosu', 'Sıcak Süt'],
-  ),
-  Drink(
-    shortName: 'Cold Brew',
-    fullName: 'Cold Brew',
-    description:
-        'Soğuk suda saatlerce demlenmiş, yumuşak içimli yüksek kafein.',
-    icon: Icons.ac_unit_rounded,
-    color: Color(0xFF506B7D),
-    moods: {DrinkMood.cold, DrinkMood.strong},
-    ingredients: ['Soğuk Su', 'Demlenmiş Kahve Özü', 'Buz'],
-  ),
-  Drink(
-    shortName: 'Frappe',
-    fullName: 'Caramel Frappe',
-    description: 'Buzlu, karamelli ve sütlü tatlı kahve rüyası.',
-    icon: Icons.severe_cold_rounded,
-    color: Color(0xFFE5B581),
-    moods: {DrinkMood.cold, DrinkMood.sweet, DrinkMood.milky},
-    ingredients: ['Süt', 'Karamel', 'Buz', 'Kahve', 'Krema'],
-  ),
-  Drink(
-    shortName: 'Matcha',
-    fullName: 'Matcha Latte',
-    description: 'Japon yeşil çayı ve sütün huzur veren lezzeti.',
-    icon: Icons.spa_rounded,
-    color: Color(0xFF86A373),
-    moods: {DrinkMood.hot, DrinkMood.fresh, DrinkMood.milky},
-    ingredients: ['Matcha Tozu', 'Sıcak Süt', 'Vanilya Şurubu'],
-  ),
-  Drink(
-    shortName: 'Iced Tea',
-    fullName: 'Peach Iced Tea',
-    description: 'Buz gibi serinletici, şeftali aromalı tatlı siyah çay.',
-    icon: Icons.yard_rounded,
-    color: Color(0xFFD68A59),
-    moods: {DrinkMood.cold, DrinkMood.fresh, DrinkMood.sweet},
-    ingredients: ['Siyah Çay', 'Şeftali Şurubu', 'Buz', 'Su'],
-  ),
-  Drink(
-    shortName: 'Hot Choco',
-    fullName: 'Hot Chocolate',
-    description:
-        'Gerçek çikolata parçalarıyla hazırlanan sıcak, tatlı kış klasiği.',
-    icon: Icons.fireplace_rounded,
-    color: Color(0xFF6B4226),
-    moods: {DrinkMood.hot, DrinkMood.sweet, DrinkMood.milky},
-    ingredients: ['Sıcak Süt', 'Kakao', 'Eritilmiş Çikolata'],
-  ),
-];
 
 class BouncyButton extends StatefulWidget {
   const BouncyButton({super.key, required this.child, required this.onTap});

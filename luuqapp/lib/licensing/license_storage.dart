@@ -243,11 +243,6 @@ class LicenseStorage {
     );
   }
 
-  /// Get last check timestamp
-  static Future<String?> getLastSuccessfulCheckAt() async {
-    return _read(_keyLastSuccessfulCheckAt);
-  }
-
   /// Reset licensing info (except device ID)
   static Future<void> clearLicense() async {
     await _delete(_keyLicenseMode);

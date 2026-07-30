@@ -354,16 +354,6 @@ class LicenseService {
     }
   }
 
-  /// Reset active license (used in developer tools bypass or logouts)
-  Future<void> logout() async {
-    await LicenseStorage.clearLicense();
-    statusNotifier.value = const LicenseStatus(
-      active: false,
-      mode: LicenseMode.none,
-      features: FeatureFlags.lockedAll,
-    );
-  }
-
   /// Get localized description for a reason code
   static String getLocalizedError(String? reason) {
     switch (reason) {
