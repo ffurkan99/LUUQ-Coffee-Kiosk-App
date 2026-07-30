@@ -2951,6 +2951,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                   ? Icon(icon, color: _cream, size: isCompact ? 32 : 38)
                   : Image.asset(
                       imagePath,
+                      // Kutu en fazla 88px; grid önbelleğiyle aynı anahtar.
+                      cacheWidth: 176,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Icon(
@@ -3215,6 +3217,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                       _wheelImagePath(
                                                         drink.imagePath!,
                                                       ),
+                                                      cacheWidth: 136,
                                                       fit: BoxFit.cover,
                                                       errorBuilder: (c, e, s) =>
                                                           Icon(
@@ -3851,6 +3854,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       clipBehavior: Clip.antiAlias,
       child: Image.asset(
         imagePath,
+        cacheWidth: 240,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
           return Container(
@@ -7625,6 +7629,7 @@ class _ProductDetailDialog extends StatelessWidget {
                           )
                         : Image.asset(
                             displayImagePath,
+                            cacheWidth: 400,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return Center(
@@ -9445,6 +9450,7 @@ class _AdminPickerThumb extends StatelessWidget {
           ? Icon(item.icon, color: _gold, size: 22)
           : Image.asset(
               item.imagePath!,
+              cacheWidth: 92,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
                 return Icon(item.icon, color: _gold, size: 22);
@@ -10117,6 +10123,9 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
                                   padding: const EdgeInsets.all(12.0),
                                   child: Image.asset(
                                     item.imagePath!,
+                                    // Vitrin 4,5 sn'de bir ürün değiştirir;
+                                    // tam çözünürlük decode önbelleği şişirir.
+                                    cacheWidth: 640,
                                     fit: BoxFit.contain,
                                     errorBuilder: (context, error, stackTrace) {
                                       return const Center(
@@ -12212,30 +12221,34 @@ class _FeastThemeCandyRainState extends State<_FeastThemeCandyRain>
     );
   }
 
+  // setState yok: painter _controller'a repaint ile bağlı; burada yalnızca
+  // parçacık konumları güncellenir, widget ağacı yeniden kurulmaz.
   void _updateParticles() {
-    if (!mounted) return;
-    setState(() {
-      for (int i = 0; i < _particles.length; i++) {
-        final p = _particles[i];
-        p.y += p.speed * 0.05; // Fall speed
-        p.rotation += p.rotationSpeed * 0.05; // Spin speed
+    for (int i = 0; i < _particles.length; i++) {
+      final p = _particles[i];
+      p.y += p.speed * 0.05; // Fall speed
+      p.rotation += p.rotationSpeed * 0.05; // Spin speed
 
-        // Horizontal sway
-        p.x += sin(_controller.value * pi * 2 + i) * 0.001;
+      // Horizontal sway
+      p.x += sin(_controller.value * pi * 2 + i) * 0.001;
 
-        // Reset if it goes off bottom
-        if (p.y > 1.1) {
-          _particles[i] = _generateParticle();
-        }
+      // Reset if it goes off bottom
+      if (p.y > 1.1) {
+        _particles[i] = _generateParticle();
       }
-    });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
       child: IgnorePointer(
-        child: CustomPaint(painter: _CandyRainPainter(particles: _particles)),
+        child: CustomPaint(
+          painter: _CandyRainPainter(
+            particles: _particles,
+            repaint: _controller,
+          ),
+        ),
       ),
     );
   }
@@ -12265,7 +12278,8 @@ class _CandyParticle {
 
 class _CandyRainPainter extends CustomPainter {
   final List<_CandyParticle> particles;
-  _CandyRainPainter({required this.particles});
+  _CandyRainPainter({required this.particles, required Listenable repaint})
+    : super(repaint: repaint);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -12462,30 +12476,34 @@ class _NewYearThemeSnowRainState extends State<_NewYearThemeSnowRain>
     );
   }
 
+  // setState yok: painter _controller'a repaint ile bağlı; burada yalnızca
+  // parçacık konumları güncellenir, widget ağacı yeniden kurulmaz.
   void _updateParticles() {
-    if (!mounted) return;
-    setState(() {
-      for (int i = 0; i < _particles.length; i++) {
-        final p = _particles[i];
-        p.y += p.speed * 0.05; // Same fall speed factor as candy rain
-        p.rotation += p.rotationSpeed * 0.05; // Spin speed
+    for (int i = 0; i < _particles.length; i++) {
+      final p = _particles[i];
+      p.y += p.speed * 0.05; // Same fall speed factor as candy rain
+      p.rotation += p.rotationSpeed * 0.05; // Spin speed
 
-        // Sway sideways slightly like real snow
-        p.x += sin(_controller.value * pi * 2 + i) * 0.0012;
+      // Sway sideways slightly like real snow
+      p.x += sin(_controller.value * pi * 2 + i) * 0.0012;
 
-        // Reset if it goes off bottom
-        if (p.y > 1.1) {
-          _particles[i] = _generateParticle();
-        }
+      // Reset if it goes off bottom
+      if (p.y > 1.1) {
+        _particles[i] = _generateParticle();
       }
-    });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
       child: IgnorePointer(
-        child: CustomPaint(painter: _SnowRainPainter(particles: _particles)),
+        child: CustomPaint(
+          painter: _SnowRainPainter(
+            particles: _particles,
+            repaint: _controller,
+          ),
+        ),
       ),
     );
   }
@@ -12515,7 +12533,8 @@ class _SnowParticle {
 
 class _SnowRainPainter extends CustomPainter {
   final List<_SnowParticle> particles;
-  _SnowRainPainter({required this.particles});
+  _SnowRainPainter({required this.particles, required Listenable repaint})
+    : super(repaint: repaint);
 
   @override
   void paint(Canvas canvas, Size size) {
