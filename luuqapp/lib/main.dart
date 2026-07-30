@@ -981,6 +981,14 @@ const Map<String, String> _menuDict = {
   'Vişneli Brownie': 'Cherry Brownie',
   'White Cascada Dom Pasta': 'White Cascada Dome Cake',
   'Yanık Cheesecake': 'Burnt Cheesecake',
+  'Çilek Limon Mono Pasta': 'Strawberry Lemon Mono Cake',
+  'Limonlu Pasta': 'Lemon Cake',
+  'Özel krema dolgulu enfes brownie rüyası':
+      'Delicious brownie dream with special cream filling',
+  'Çilek ve limon ferahlığıyla mono pasta':
+      'Mono cake with strawberry and lemon freshness',
+  'Limon soslu ve kremalı nefis pasta dilimi':
+      'Delicious cake slice with lemon sauce and cream',
 
   // Sandviçler
   'Dana Jambon': 'Beef Ham',
@@ -2218,24 +2226,12 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                     AnimatedBuilder(
                       animation: _pulseController,
                       builder: (context, child) {
-                        return Text(
-                          tr(
-                            'Başlamak için ekrana dokunun',
-                            'Tap the screen to start',
+                        return Opacity(
+                          opacity: (0.3 + (_pulseController.value * 0.7)).clamp(
+                            0.0,
+                            1.0,
                           ),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: isCompact ? 16 : 24,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white.withValues(
-                              alpha:
-                                  0.9 *
-                                  (0.3 + (_pulseController.value * 0.7)).clamp(
-                                    0.0,
-                                    1.0,
-                                  ),
-                            ),
-                          ),
+                          child: child,
                         );
                       },
                       child: Text(
@@ -2247,7 +2243,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                         style: TextStyle(
                           fontSize: isCompact ? 16 : 24,
                           fontWeight: FontWeight.w500,
-                          color: Colors.white.withValues(alpha: 0.88),
+                          color: Colors.white.withValues(alpha: 0.9),
                           letterSpacing: isCompact ? 1.5 : 3,
                         ),
                       ),
@@ -2638,8 +2634,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   }
 
   List<_MenuItem> get _recommendationDrinkOptions {
-    const dessertCategories = {'Pasta & TatlÄ±', 'LUUQ Chocolate'};
-    const hiddenCategories = {'Ekstralar', 'Termos & Seramik', 'SandviÃ§'};
+    const dessertCategories = {'Pasta & Tatlı', 'LUUQ Chocolate'};
+    const hiddenCategories = {'Ekstralar', 'Termos & Seramik', 'Sandviç'};
     return _menuCategories.entries
         .where(
           (entry) =>
@@ -9841,13 +9837,13 @@ Set<DrinkMood> _wheelMoodsForMenuItem(_MenuItem item, String category) {
   final lowerDesc = trMenu(item.desc).toLowerCase();
   if (lowerName.contains('latte') ||
       lowerName.contains('mocha') ||
-      lowerDesc.contains('sÃ¼t') ||
+      lowerDesc.contains('süt') ||
       lowerDesc.contains('krem')) {
     moods.add(DrinkMood.milky);
   }
   if (lowerName.contains('espresso') ||
       lowerName.contains('americano') ||
-      lowerDesc.contains('yoÄŸun')) {
+      lowerDesc.contains('yoğun')) {
     moods.add(DrinkMood.strong);
   }
   if (moods.isEmpty) moods.add(DrinkMood.fresh);
