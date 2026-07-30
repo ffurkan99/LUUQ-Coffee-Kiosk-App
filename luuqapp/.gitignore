@@ -43,3 +43,25 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Çalışma zamanı çıktıları: uygulama yerel çalıştırmalarda bu dosyaları
+# proje köküne yazar; repoya girmemeliler.
+/luuq_analytics.json
+/luuq_device_id.txt
+/luuq_theme.txt
+/luuq_volume.txt
+/luuq_settings.json
+/match_results.txt
+/menu_items_dump.txt
+
+# Yerel tasarım yedekleri: APK'ya paketlenmezler, repoya da girmesinler.
+# (Diskte durmaya devam ederler; sadece git takip etmez.)
+assets/menu/yedek/
+assets/sounds_yedek/
+**/* - Kopya.*
+assets/* eski.*
+assets/* ilk.*
+assets/* yedek.*
+assets/* orijinal.*
+assets/luuqtanitim blur*.mp4
+assets/luuqtanitim 10.mp4
