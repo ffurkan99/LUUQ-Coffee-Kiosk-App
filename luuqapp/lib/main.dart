@@ -613,6 +613,7 @@ const Map<String, String> _menuDict = {
   'Yeni': 'New',
   'Klasik': 'Classic',
   'Soğuk': 'Cold',
+  'Yazın İyisi': 'Summer Favorite',
 
   'Ahududu ve taze limonun canlandırıcı uyumu':
       'Refreshing harmony of raspberry and fresh lemon',
@@ -1719,7 +1720,11 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   String _findCategoryForDrink(Drink drink) {
     for (final entry in _menuCategories.entries) {
       for (final item in entry.value) {
-        if (item.name == drink.fullName || item.name == drink.shortName) {
+        // drink.fullName trMenu ile çevrilmiş addır; İngilizce modda ham
+        // item.name ile eşleşmez, çevrilmiş adla da karşılaştırılmalı.
+        if (item.name == drink.fullName ||
+            trMenu(item.name) == drink.fullName ||
+            item.name == drink.shortName) {
           return entry.key;
         }
       }
@@ -2669,14 +2674,24 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     return items;
   }
 
+  // Varsayılan öneri: admin hiç seçim yapmadıysa fotoğrafı olan ilk ürün.
+  // (Fotoğrafsız varsayılan, en görünür karta boş ikon kutusu koyuyordu.)
   _MenuItem get _currentBaristaDrink {
     final options = _recommendationDrinkOptions;
-    return _baristaDrink ?? options.first;
+    return _baristaDrink ??
+        options.firstWhere(
+          (item) => item.imagePath != null,
+          orElse: () => options.first,
+        );
   }
 
   _MenuItem get _currentBaristaDessert {
     final options = _recommendationDessertOptions;
-    return _baristaDessert ?? options.first;
+    return _baristaDessert ??
+        options.firstWhere(
+          (item) => item.imagePath != null,
+          orElse: () => options.first,
+        );
   }
 
   Widget _buildCanvasMainLayout(
