@@ -2674,14 +2674,24 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     return items;
   }
 
+  // Varsayılan öneri: admin hiç seçim yapmadıysa fotoğrafı olan ilk ürün.
+  // (Fotoğrafsız varsayılan, en görünür karta boş ikon kutusu koyuyordu.)
   _MenuItem get _currentBaristaDrink {
     final options = _recommendationDrinkOptions;
-    return _baristaDrink ?? options.first;
+    return _baristaDrink ??
+        options.firstWhere(
+          (item) => item.imagePath != null,
+          orElse: () => options.first,
+        );
   }
 
   _MenuItem get _currentBaristaDessert {
     final options = _recommendationDessertOptions;
-    return _baristaDessert ?? options.first;
+    return _baristaDessert ??
+        options.firstWhere(
+          (item) => item.imagePath != null,
+          orElse: () => options.first,
+        );
   }
 
   Widget _buildCanvasMainLayout(

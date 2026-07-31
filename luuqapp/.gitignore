@@ -65,3 +65,6 @@ assets/* yedek.*
 assets/* orijinal.*
 assets/luuqtanitim blur*.mp4
 assets/luuqtanitim 10.mp4
+
+# Gecici UI sonda ekran goruntuleri (yerel inceleme icin)
+test/probe/
