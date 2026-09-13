@@ -1987,7 +1987,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                               -_logoSize(
                                                                 context,
                                                               ) *
-                                                              0.09,
+                                                              0.035,
                                                           width:
                                                               _logoSize(
                                                                 context,
@@ -2000,7 +2000,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                               0.5,
                                                           child: IgnorePointer(
                                                             child: Transform.rotate(
-                                                              angle: 0.15,
+                                                              angle: 0.10,
                                                               child: const CustomPaint(
                                                                 painter:
                                                                     _SantaHatPainter(),
@@ -12718,8 +12718,9 @@ class _SantaHatPainter extends CustomPainter {
     final redPaint = Paint()
       ..shader = LinearGradient(
         colors: [
-          const Color(0xFFC0392B), // Deep crimson red
-          const Color(0xFFE74C3C), // Bright festive red
+          const Color(0xFF981B35), // Velvet shadow
+          const Color(0xFFDF354B), // Red fabric
+          const Color(0xFFF06469), // Soft rim light
         ],
         begin: Alignment.bottomLeft,
         end: Alignment.topRight,
@@ -12731,11 +12732,12 @@ class _SantaHatPainter extends CustomPainter {
     // Start at bottom-left of the red part
     hatPath.moveTo(w * 0.15, h * 0.7);
     // Control point for the top curve of the hat
-    hatPath.quadraticBezierTo(w * 0.35, h * 0.12, w * 0.72, h * 0.18);
+    hatPath.cubicTo(w * 0.19, h * 0.39, w * 0.30, h * 0.12, w * 0.53, h * 0.14);
     // Tip of the hat dropping down slightly
-    hatPath.quadraticBezierTo(w * 0.95, h * 0.22, w * 0.82, h * 0.52);
+    hatPath.cubicTo(w * 0.76, h * 0.12, w * 0.88, h * 0.29, w * 0.85, h * 0.49);
     // Inner fold curve back to bottom-right
-    hatPath.quadraticBezierTo(w * 0.74, h * 0.44, w * 0.78, h * 0.7);
+    hatPath.cubicTo(w * 0.77, h * 0.47, w * 0.71, h * 0.34, w * 0.62, h * 0.33);
+    hatPath.cubicTo(w * 0.64, h * 0.43, w * 0.71, h * 0.56, w * 0.78, h * 0.70);
     hatPath.close();
 
     // Draw shadow under the hat body
@@ -12751,7 +12753,7 @@ class _SantaHatPainter extends CustomPainter {
     // Draw white fluffy brim at the bottom
     final whiteBrimPaint = Paint()
       ..shader = LinearGradient(
-        colors: [Colors.white, const Color(0xFFECF0F1)],
+        colors: [const Color(0xFFFFFCF4), const Color(0xFFE0DED9)],
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
       ).createShader(Rect.fromLTWH(0, h * 0.62, w, h * 0.2))
@@ -12759,11 +12761,25 @@ class _SantaHatPainter extends CustomPainter {
 
     // Brim as a soft curved path
     final brimPath = Path();
-    brimPath.moveTo(w * 0.1, h * 0.7);
-    brimPath.quadraticBezierTo(w * 0.45, h * 0.62, w * 0.8, h * 0.7);
-    brimPath.quadraticBezierTo(w * 0.85, h * 0.78, w * 0.8, h * 0.84);
-    brimPath.quadraticBezierTo(w * 0.45, h * 0.76, w * 0.1, h * 0.84);
-    brimPath.quadraticBezierTo(w * 0.05, h * 0.76, w * 0.1, h * 0.7);
+    brimPath.moveTo(w * 0.12, h * 0.65);
+    brimPath.quadraticBezierTo(w * 0.45, h * 0.59, w * 0.78, h * 0.65);
+    brimPath.cubicTo(
+      w * 0.86,
+      h * 0.66,
+      w * 0.86,
+      h * 0.80,
+      w * 0.78,
+      h * 0.81,
+    );
+    brimPath.quadraticBezierTo(w * 0.45, h * 0.77, w * 0.12, h * 0.81);
+    brimPath.cubicTo(
+      w * 0.04,
+      h * 0.81,
+      w * 0.04,
+      h * 0.66,
+      w * 0.12,
+      h * 0.65,
+    );
     brimPath.close();
 
     // Brim shadow
@@ -12780,17 +12796,9 @@ class _SantaHatPainter extends CustomPainter {
       ..color = Colors.white
       ..style = PaintingStyle.fill;
 
-    for (int i = 0; i <= 6; i++) {
-      final t = i / 6.0;
-      // Interpolate along the curve of the brim
-      final bx = w * 0.1 + (w * 0.7) * t;
-      final by = h * 0.77 + sin(t * pi) * (-h * 0.08); // follow curve
-      canvas.drawCircle(Offset(bx, by), w * 0.06, fluffPaint);
-    }
-
     // Draw pom-pom at the tip
-    final pomPomCenter = Offset(w * 0.82, h * 0.54);
-    final pomPomRadius = w * 0.11;
+    final pomPomCenter = Offset(w * 0.85, h * 0.50);
+    final pomPomRadius = w * 0.095;
     // Pom-pom shadow
     canvas.drawCircle(
       pomPomCenter,
@@ -12805,13 +12813,13 @@ class _SantaHatPainter extends CustomPainter {
     // Draw smaller overlay circles for pom-pom fluffiness
     canvas.drawCircle(
       pomPomCenter + Offset(-w * 0.02, -h * 0.02),
-      pomPomRadius * 0.8,
-      Paint()..color = const Color(0xFFFBFBFC),
+      pomPomRadius * 0.40,
+      Paint()..color = const Color(0xFFFFFEF8),
     );
     canvas.drawCircle(
       pomPomCenter + Offset(w * 0.02, h * 0.02),
-      pomPomRadius * 0.8,
-      Paint()..color = const Color(0xFFECEFF1),
+      pomPomRadius * 0.24,
+      Paint()..color = const Color(0xFFECE9E2),
     );
   }
 
