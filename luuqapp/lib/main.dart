@@ -4511,6 +4511,61 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
     });
   }
 
+  Widget _buildHesapKimdeActionButton({
+    required String keyName,
+    required String label,
+    required String semanticLabel,
+    required VoidCallback? onTap,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    required Color borderColor,
+    bool emphasize = false,
+  }) {
+    return Semantics(
+      container: true,
+      excludeSemantics: true,
+      button: true,
+      enabled: onTap != null,
+      label: semanticLabel,
+      child: BouncyButton(
+        onTap: onTap,
+        child: SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: Container(
+            key: ValueKey(keyName),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 1.5),
+              boxShadow: emphasize
+                  ? [
+                      BoxShadow(
+                        color: _mint.withValues(alpha: 0.34),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: foregroundColor,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -4774,61 +4829,63 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   child: (_result != null && !_isAnimating)
-                      ? Column(
+                      ? Align(
                           key: ValueKey(_result),
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
-                                vertical: 20,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _bgDark,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: _gold.withValues(alpha: 0.5),
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _gold.withValues(alpha: 0.15),
-                                    blurRadius: 20,
-                                  ),
-                                ],
-                              ),
-                              child: Text(
-                                tr(
-                                  'Hesap $_result. kişide! 🎉',
-                                  'Person $_result pays the bill! 🎉',
-                                ),
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w900,
-                                  color: _playerColors[_result! - 1],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            BouncyButton(
-                              onTap: _spin,
-                              child: Padding(
+                          alignment: Alignment.bottomCenter,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Container(
+                                width: double.infinity,
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 12,
+                                  horizontal: 32,
+                                  vertical: 16,
+                                ),
+                                key: const ValueKey('who_pays_winner_message'),
+                                decoration: BoxDecoration(
+                                  color: _bgDark,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: _gold.withValues(alpha: 0.5),
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: _gold.withValues(alpha: 0.15),
+                                      blurRadius: 20,
+                                    ),
+                                  ],
                                 ),
                                 child: Text(
-                                  tr('Tekrar Çek', 'Draw Again'),
+                                  tr(
+                                    'Hesap $_result. kişide! 🎉',
+                                    'Person $_result pays the bill! 🎉',
+                                  ),
+                                  textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    color: _mint,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w900,
+                                    color: _playerColors[_result! - 1],
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 8),
+                              _buildHesapKimdeActionButton(
+                                keyName: 'who_pays_redraw_button',
+                                label: tr('Tekrar Çek', 'Draw Again'),
+                                semanticLabel: tr(
+                                  'Yeni bir sonuç çek',
+                                  'Draw again',
+                                ),
+                                onTap: _spin,
+                                backgroundColor: _mint,
+                                foregroundColor: _bgDark,
+                                borderColor: _mint,
+                                emphasize: true,
+                              ),
+                            ],
+                          ),
                         )
                       : Semantics(
                           key: const ValueKey('spin_btn'),
@@ -4841,6 +4898,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                           child: BouncyButton(
                             onTap: _isAnimating ? null : _spin,
                             child: Container(
+                              width: double.infinity,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 48,
                                 vertical: 18,
@@ -4862,6 +4920,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                                 _isAnimating
                                     ? tr('KARILIYOR...', 'MIXING...')
                                     : tr('KARIŞTIR & ÇEK!', 'MIX & DRAW!'),
+                                textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w900,
@@ -4875,25 +4934,17 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
 
             // Close button
-            BouncyButton(
+            _buildHesapKimdeActionButton(
+              keyName: 'who_pays_close_button',
+              label: tr('Kapat', 'Close'),
+              semanticLabel: tr('Hesap Kimde ekranını kapat', 'Close Who Pays'),
               onTap: () => Navigator.of(context).pop(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                child: Text(
-                  tr('Kapat', 'Close'),
-                  style: TextStyle(
-                    color: _mutedText,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+              backgroundColor: _bgDark,
+              foregroundColor: _mutedText,
+              borderColor: Colors.white.withValues(alpha: 0.16),
             ),
           ],
         ),

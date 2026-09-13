@@ -59,6 +59,16 @@ void main() {
     await _openWhoPaysDialog(tester);
 
     expect(find.text('KARIŞTIR & ÇEK!'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('KARIŞTIR & ÇEK!')).textAlign,
+      TextAlign.center,
+    );
+    final initialCloseButton = find.byKey(
+      const ValueKey('who_pays_close_button'),
+    );
+    expect(initialCloseButton, findsOneWidget);
+    expect(tester.getSize(initialCloseButton).height, greaterThanOrEqualTo(44));
+    expect(find.bySemanticsLabel('Hesap Kimde ekranını kapat'), findsOneWidget);
     await tester.tapAt(const Offset(8, 8));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('KARIŞTIR & ÇEK!'), findsOneWidget);
@@ -90,6 +100,37 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Tekrar Çek'), findsOneWidget);
+    expect(find.text('Kapat'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.textContaining(RegExp(r'^Hesap [1-6]\. kişide! 🎉$')),
+          )
+          .textAlign,
+      TextAlign.center,
+    );
+    final winnerRect = tester.getRect(
+      find.byKey(const ValueKey('who_pays_winner_message')),
+    );
+    final redrawRect = tester.getRect(
+      find.byKey(const ValueKey('who_pays_redraw_button')),
+    );
+    final closeRect = tester.getRect(
+      find.byKey(const ValueKey('who_pays_close_button')),
+    );
+    expect(redrawRect.width, winnerRect.width);
+    expect(closeRect.width, winnerRect.width);
+    expect(redrawRect.left, winnerRect.left);
+    expect(closeRect.left, winnerRect.left);
+    expect(redrawRect.right, winnerRect.right);
+    expect(closeRect.right, winnerRect.right);
+    expect(redrawRect.top, greaterThanOrEqualTo(winnerRect.bottom));
+    expect(closeRect.top, greaterThan(redrawRect.bottom));
+    expect(redrawRect.top - winnerRect.bottom, 8);
+    expect(closeRect.top - redrawRect.bottom, 8);
+    expect(winnerRect.height, greaterThanOrEqualTo(44));
+    expect(redrawRect.height, greaterThanOrEqualTo(44));
+    expect(closeRect.height, greaterThanOrEqualTo(44));
     expect(
       find.bySemanticsLabel(RegExp(r'Kazanan top çıkışta: [1-6]\. kişi')),
       findsOneWidget,
@@ -156,26 +197,123 @@ void main() {
     // büyüyüp görsel kayma yaratamaz.
     final card = find.byKey(const ValueKey('who_pays_card'));
     final idleSize = tester.getSize(card);
+    final idleCloseRect = tester.getRect(
+      find.byKey(const ValueKey('who_pays_close_button')),
+    );
+    expect(idleCloseRect.height, greaterThanOrEqualTo(44));
 
     await tester.tap(find.text('KARIŞTIR & ÇEK!'));
     await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('KARILIYOR...'), findsOneWidget);
     expect(tester.getSize(card), idleSize);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('who_pays_close_button'))),
+      idleCloseRect,
+    );
 
     await tester.pump(
       Duration(
         milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
       ),
     );
-    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Tekrar Çek'), findsOneWidget);
     expect(tester.getSize(card), idleSize);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('who_pays_close_button'))),
+      idleCloseRect,
+    );
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
     _disableLicensedKiosk();
   });
 
+  testWidgets('who pays result actions fit in English', (
+    WidgetTester tester,
+  ) async {
+    _enableLicensedKiosk();
+    appLanguageNotifier.value = AppLanguage.en;
+    await _pumpKioskAtSize(tester, const Size(1920, 1080));
+    await _openWhoPaysDialog(tester, language: AppLanguage.en);
+
+    expect(find.text('MIX & DRAW!'), findsOneWidget);
+    expect(find.text('Close'), findsOneWidget);
+    expect(find.bySemanticsLabel('Close Who Pays'), findsOneWidget);
+
+    await tester.tap(find.text('MIX & DRAW!'));
+    await tester.pump();
+    await tester.pump(
+      Duration(
+        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(
+      find.textContaining(RegExp(r'^Person [1-6] pays the bill! 🎉$')),
+      findsOneWidget,
+    );
+    expect(find.text('Draw Again'), findsOneWidget);
+    expect(find.text('Close'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    _disableLicensedKiosk();
+  });
+  testWidgets('who pays result grid fits on a narrow landscape kiosk', (
+    WidgetTester tester,
+  ) async {
+    _enableLicensedKiosk();
+    await _pumpKioskAtSize(tester, const Size(1280, 720));
+
+    final overflowErrors = <String>[];
+    final previousOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      final message = details.exceptionAsString();
+      if (message.toLowerCase().contains('overflow')) {
+        overflowErrors.add(message);
+      }
+      previousOnError?.call(details);
+    };
+
+    try {
+      await _openWhoPaysDialog(tester);
+      await tester.tap(find.text('KARIŞTIR & ÇEK!'));
+      await tester.pump();
+      await tester.pump(
+        Duration(
+          milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 50,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(find.textContaining('Hesap '), findsOneWidget);
+      final winnerRect = tester.getRect(
+        find.byKey(const ValueKey('who_pays_winner_message')),
+      );
+      final redrawRect = tester.getRect(
+        find.byKey(const ValueKey('who_pays_redraw_button')),
+      );
+      final closeRect = tester.getRect(
+        find.byKey(const ValueKey('who_pays_close_button')),
+      );
+      expect(redrawRect.width, winnerRect.width);
+      expect(closeRect.width, winnerRect.width);
+      expect(closeRect.left, winnerRect.left);
+      expect(closeRect.right, winnerRect.right);
+      expect(redrawRect.top, greaterThanOrEqualTo(winnerRect.bottom));
+      expect(closeRect.top, greaterThan(redrawRect.bottom));
+      expect(overflowErrors, isEmpty);
+      expect(tester.takeException(), isNull);
+    } finally {
+      FlutterError.onError = previousOnError;
+      await tester.pumpWidget(const SizedBox.shrink());
+      _disableLicensedKiosk();
+    }
+  });
   testWidgets('who pays locks controls and supports six-player redraw', (
     WidgetTester tester,
   ) async {
@@ -229,6 +367,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pump();
     expect(find.text('Tekrar Çek'), findsOneWidget);
+    expect(find.text('Kapat'), findsOneWidget);
+    final winnerRect = tester.getRect(
+      find.byKey(const ValueKey('who_pays_winner_message')),
+    );
+    final redrawRect = tester.getRect(
+      find.byKey(const ValueKey('who_pays_redraw_button')),
+    );
+    final closeRect = tester.getRect(
+      find.byKey(const ValueKey('who_pays_close_button')),
+    );
+    expect(redrawRect.top, greaterThanOrEqualTo(winnerRect.bottom));
+    expect(closeRect.top, greaterThan(redrawRect.bottom));
+    expect(winnerRect.height, greaterThanOrEqualTo(44));
+    expect(redrawRect.height, greaterThanOrEqualTo(44));
+    expect(closeRect.height, greaterThanOrEqualTo(44));
     expect(
       find.bySemanticsLabel(RegExp(r'Kazanan top çıkışta: [1-6]\. kişi')),
       findsOneWidget,
@@ -290,22 +443,34 @@ Future<void> _pumpKioskAtSize(
   await tester.pump(const Duration(milliseconds: 350));
 }
 
-Future<void> _openWhoPaysDialog(WidgetTester tester) async {
-  for (
-    var i = 0;
-    i < 60 && find.text('Mini Çarkı Aç').evaluate().isEmpty;
-    i++
-  ) {
-    await tester.tapAt(const Offset(960, 540));
+Future<void> _openWhoPaysDialog(
+  WidgetTester tester, {
+  AppLanguage language = AppLanguage.tr,
+}) async {
+  final launchLabel = language == AppLanguage.tr
+      ? 'Mini Çarkı Aç'
+      : 'Open Mini Wheel';
+  final drawLabel = language == AppLanguage.tr
+      ? 'KARIŞTIR & ÇEK!'
+      : 'MIX & DRAW!';
+
+  final viewportSize = tester.view.physicalSize / tester.view.devicePixelRatio;
+  final viewportCenter = Offset(
+    viewportSize.width / 2,
+    viewportSize.height / 2,
+  );
+  for (var i = 0; i < 60 && find.text(launchLabel).evaluate().isEmpty; i++) {
+    await tester.tapAt(viewportCenter);
     await tester.pump(const Duration(milliseconds: 100));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
     );
   }
-  expect(find.text('Mini Çarkı Aç'), findsOneWidget);
-  await tester.tap(find.text('Mini Çarkı Aç'));
+  expect(find.text(launchLabel), findsOneWidget);
+  await tester.tap(find.text(launchLabel));
   await tester.pump(const Duration(milliseconds: 300));
-  expect(find.text('KARIŞTIR & ÇEK!'), findsOneWidget);
+  await tester.pump(const Duration(milliseconds: 300));
+  expect(find.text(drawLabel), findsOneWidget);
   expect(find.byKey(const ValueKey('who_pays_machine')), findsOneWidget);
 }
 
