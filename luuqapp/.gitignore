@@ -68,3 +68,6 @@ assets/luuqtanitim 10.mp4
 
 # Gecici UI sonda ekran goruntuleri (yerel inceleme icin)
 test/probe/
+
+# Golden comparison output written by failed matchesGoldenFile runs
+/test/failures/

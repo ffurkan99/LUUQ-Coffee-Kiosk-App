@@ -1,4 +1,4 @@
-package com.example.luuqapp
+package com.luuq.kiosk
 
 import android.media.AudioAttributes
 import android.media.SoundPool
