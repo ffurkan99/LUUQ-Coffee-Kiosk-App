@@ -59,7 +59,12 @@ class WhoPaysLotterySimulation {
         final position = index == initialState.seatedBallIndex
             ? const Offset(0, winnerSeatY)
             : initialState.chamberPositions[index];
-        balls.add(WhoPaysBallState(position: position));
+        balls.add(
+          WhoPaysBallState(
+            position: position,
+            velocity: initialState.chamberVelocities?[index] ?? Offset.zero,
+          ),
+        );
       }
       _reducedMotionStartPositions.addAll(balls.map((ball) => ball.position));
     } else {
@@ -84,10 +89,11 @@ class WhoPaysLotterySimulation {
   static const double _gateCloseStart = 3.10;
   static const double _gateCloseLength = 0.14;
   static const double gateSweepClearY = 158.0;
-  // Son-çare penceresi: fizik son 100 ms'ye dek hiçbir topu ağızdan
-  // düşürememişse, ağza O ANDA en yakın top atanır ve düz yayla alınır —
-  // kural yine "en yakın kazanır", endeks önseli yoktur.
-  static const double _guaranteeWindow = 0.10;
+
+  /// Nominal koreografi bittikten sonra fiziksel capture bekleme üst sınırı.
+  /// Bu süre dolduğunda kazanan seçilmez; simülasyon sonuçsuz biçimde uyur.
+  static const double maxPostDurationWaitSeconds = 8.0;
+  static const double restQuietDurationSeconds = 0.6;
 
   /// Çökme fazında yerçekimi çarpanı — kapak açılmadan topların tabana
   /// inmesine yardım eder (tüm toplara eşit uygulanır).
@@ -131,12 +137,12 @@ class WhoPaysLotterySimulation {
   static const double mixingDragRate = 0.22;
   static const double settleDragRate = 2.0;
   static const double tubeDragRate = 0.20;
-  // Drag on the captured ball while it is still in the chamber (last-resort
-  // transit only). Lower than settleDragRate so the guarantee spring isn't
-  // fighting heavy viscous damping. Losers keep settleDragRate.
+  // Drag on the captured ball while it is still in the chamber. Lower than
+  // settleDragRate so the capture transit spring is not fighting heavy
+  // viscous damping. Losers keep settleDragRate.
   static const double capturedTransitDragRate = 0.6;
 
-  // Tube mouth reference point and the last-resort guarantee forces. The
+  // Tube mouth reference point and the physical capture transit forces. The
   // transit is wall-hugging: a radial spring holds the ball against the
   // glass while a tangential sweep carries it along the curve to the mouth
   // (no straight-line cut through the chamber); a direct spring takes over
@@ -144,7 +150,7 @@ class WhoPaysLotterySimulation {
   static const Offset mouthTarget = Offset(0, 126);
   static const double suctionSpringRate = 90.0;
   static const double suctionDampingRate = 2.5;
-  static const double suctionGuaranteeMax = 8000.0;
+  static const double captureTransitMaxForce = 8000.0;
   static const double transitNearMouthAngle = 0.45;
   static const double transitSweepStrength = 4200.0;
 
@@ -208,17 +214,6 @@ class WhoPaysLotterySimulation {
   static const double tubeHalfWidth = 4.0;
   static const double winnerSeatY = 209.0;
 
-  /// Resting slot angles on the floor arc (radians, π/2 = bottom center).
-  /// 0.42 rad ≈ 45 px of arc at r=107, wider than a 42 px ball, so relocated
-  /// balls can never overlap each other.
-  static const List<double> floorSlotAngles = <double>[
-    pi / 2,
-    pi / 2 + 0.42,
-    pi / 2 - 0.42,
-    pi / 2 + 0.84,
-    pi / 2 - 0.84,
-  ];
-
   final int personCount;
   final int seed;
   final Random _random;
@@ -227,14 +222,15 @@ class WhoPaysLotterySimulation {
   final int? _intakeBallIndex;
   bool _intakeReleased = false;
 
-  // Fiziğin yakaladığı top. İki yoldan atanır: (a) doğal — kapak açıkken
-  // bir topun merkezi huni bandına girdiği an; (b) son çare — garanti
-  // penceresi dolduğunda ağza en yakın top. Bir kez atanınca değişmez.
+  // Fiziğin gerçekten huni girişine soktuğu top. Bu değer yalnızca fizik
+  // adımında giriş sınırı geçildiğinde atanır; zaman aşımı veya yakınlık
+  // fallback'i kazanan üretemez.
   int? _capturedBallIndex;
 
   // Reduced-motion gölge çözümünün önbelleği (canlı fizik koşulmadığında
   // kazanan, aynı seed'li gölge kopyanın sona koşulmasıyla öğrenilir).
   int? _reducedMotionCaptured;
+  WhoPaysLotterySimulation? _reducedMotionShadow;
 
   /// Fiziğin ağızdan düşürdüğü topun endeksi. Canlı koşumda atama anından
   /// itibaren, reduced-motion'da gölge çözümden gelir. `phase == seated`
@@ -245,10 +241,12 @@ class WhoPaysLotterySimulation {
   // yastığı görevini tamamlar ve kaybedenler dondurulmadan önce tabana
   // inebilsin diye iniş yardımı devralır.
   bool _capturedReachedTube = false;
+  bool _capturedReachedSeat = false;
+  bool _reducedMotionStalled = false;
+  bool _reducedMotionSeated = false;
 
   // Kapanışın başladığı mutlak an (sn). Kazanan süpürme bandını geçince
-  // (en erken _gateCloseStart'ta) atanır; zaman çizelgesi sonunda hâlâ
-  // atanmadıysa son-kare garantisi kapatır.
+  // (en erken _gateCloseStart'ta) atanır. Capture yoksa kapak açık kalır.
   double? _gateCloseBeganAt;
 
   final List<WhoPaysBallState> balls = <WhoPaysBallState>[];
@@ -263,6 +261,89 @@ class WhoPaysLotterySimulation {
   WhoPaysLotteryPhase phase = WhoPaysLotteryPhase.idle;
 
   double _accumulator = 0;
+  bool get isSleeping => _isSleeping;
+  bool get isPhysicallySeated =>
+      _capturedReachedSeat ||
+      (_reducedMotionSeated && timelineSeconds >= durationSeconds);
+  bool get isStalled =>
+      (_reducedMotionStalled && timelineSeconds >= durationSeconds) ||
+      (_isSleeping && capturedBallIndex == null);
+  bool _isSleeping = false;
+  double _quietSeconds = 0;
+  List<Offset>? _restReference;
+
+  /// Called when an external interaction changes the physical state.
+  void wake() {
+    _isSleeping = false;
+    _quietSeconds = 0;
+    _restReference = null;
+  }
+
+  void _checkRest(double dt) {
+    if (timelineSeconds <= durationSeconds) return;
+    if (gateProgress != 0 && capturedBallIndex != null) return;
+    final supported = List<bool>.filled(personCount, false);
+    for (var i = 0; i < personCount; i++) {
+      final ball = balls[i];
+      final p = ball.position;
+      final rotorContact = _deepestRotorContact(
+        p + const Offset(0, 0.5),
+        rotorAngle,
+        i,
+      );
+      supported[i] =
+          i == capturedBallIndex ||
+          (p.distance >= maxBallCenterRadius - 0.5 && p.dy > 25) ||
+          (rotorContact != null && rotorContact.normal.dy < -0.25);
+    }
+    // Support must lead to the glass or rotor, not a floating cluster.
+    for (var pass = 0; pass < personCount; pass++) {
+      for (var i = 0; i < personCount; i++) {
+        if (supported[i]) continue;
+        for (var j = 0; j < personCount; j++) {
+          final delta = balls[j].position - balls[i].position;
+          if (supported[j] &&
+              delta.dy > 10 &&
+              delta.distance <= ballRadius * 2 + 0.5) {
+            supported[i] = true;
+          }
+        }
+      }
+    }
+    final reference = _restReference;
+    final stable =
+        supported.every((value) => value) &&
+        balls.every((ball) => ball.velocity.distance < 2) &&
+        (reference == null ||
+            List.generate(
+              personCount,
+              (i) => (balls[i].position - reference[i]).distance < 0.3,
+            ).every((v) => v));
+    if (!stable) {
+      _quietSeconds = 0;
+      _restReference = balls.map((b) => b.position).toList();
+      return;
+    }
+    _restReference ??= balls.map((b) => b.position).toList();
+    _quietSeconds += dt;
+    if (_quietSeconds >= restQuietDurationSeconds) {
+      _isSleeping = true;
+      for (final ball in balls) {
+        ball.velocity = Offset.zero;
+      }
+      _accumulator = 0;
+    }
+  }
+
+  late final List<double> _contactBudget = List<double>.filled(personCount, 0);
+
+  double _contactPush(int index, double amount, double drawTime) {
+    if (drawTime <= _idleDuration + 1e-9) return amount;
+    final push = min(amount, _contactBudget[index]);
+    _contactBudget[index] -= push;
+    return push;
+  }
+
   late final List<double> _ridgeShiftBudget = List<double>.filled(
     personCount,
     0,
@@ -320,7 +401,15 @@ class WhoPaysLotterySimulation {
   }
 
   WhoPaysStepReport advanceTo(double targetSeconds) {
-    final target = targetSeconds.clamp(0.0, durationSeconds);
+    final target = max(0.0, targetSeconds);
+    if (_isSleeping) {
+      timelineSeconds = max(timelineSeconds, target);
+      return const WhoPaysStepReport(
+        physicsSteps: 0,
+        droppedCatchUp: false,
+        maxImpactSpeed: 0,
+      );
+    }
     if (target <= timelineSeconds) {
       return const WhoPaysStepReport(
         physicsSteps: 0,
@@ -364,29 +453,21 @@ class WhoPaysLotterySimulation {
       _gateCloseBeganAt = timelineSeconds;
     }
 
-    // A background/resume jump is deliberately not fully simulated. If the
-    // controller has already completed, guarantee a valid in-app result
-    // rather than leaving the draw unresolved: the ball nearest the mouth is
-    // the winner (same closest-wins rule, applied at the freeze frame).
-    if (target >= durationSeconds) {
-      final seatedIndex = _capturedBallIndex ??= _nearestToMouth();
-      balls[seatedIndex]
-        ..position = const Offset(0, winnerSeatY)
-        ..velocity = Offset.zero;
-      // Donma karesi kapalı kapak gösterir: kapanış hiç başlamadıysa veya
-      // (geç varışta) bitmeye vakti kalmadıysa son karede tamamlanmış
-      // sayılır.
-      final latestCloseStart = timelineSeconds - _gateCloseLength;
-      final closeBeganAt = _gateCloseBeganAt;
-      if (closeBeganAt == null || closeBeganAt > latestCloseStart) {
-        _gateCloseBeganAt = latestCloseStart;
-      }
-      if (droppedCatchUp) {
-        _settleLosersToFloor();
-      }
-    }
     gateProgress = _gateProgressAt(target);
 
+    _checkRest(physicsSteps * fixedStepSeconds);
+    if (_capturedBallIndex == null &&
+        target >= durationSeconds + maxPostDurationWaitSeconds) {
+      _isSleeping = true;
+      _quietSeconds = restQuietDurationSeconds;
+      for (final ball in balls) {
+        ball.velocity = Offset.zero;
+      }
+      _accumulator = 0;
+    }
+    if (_capturedReachedSeat) {
+      phase = WhoPaysLotteryPhase.seated;
+    }
     _updatePresentation();
     return WhoPaysStepReport(
       physicsSteps: physicsSteps,
@@ -398,14 +479,16 @@ class WhoPaysLotterySimulation {
   /// Snapshot of the current ball layout, used to seed the next draw's
   /// continuity.
   ///
-  /// Note: advanceReducedMotion never mutates [balls], so a reduced-motion
-  /// draw exports its construction-time layout — which is exactly what
-  /// reduced motion rendered for the losers. Keep it that way: mutating
-  /// balls there would desynchronize redraw continuity.
+  /// Export the displayed positions, including reduced-motion intake changes.
+  /// Reduced-motion layouts have no physical momentum to transfer.
   WhoPaysInitialState exportState() {
     return WhoPaysInitialState(
-      chamberPositions: List<Offset>.unmodifiable(
-        balls.map((ball) => ball.position),
+      chamberPositions: List<Offset>.unmodifiable(renderPositions),
+      chamberVelocities: List<Offset>.unmodifiable(
+        balls.map(
+          (ball) =>
+              _reducedMotionCaptured != null ? Offset.zero : ball.velocity,
+        ),
       ),
       seatedBallIndex: phase == WhoPaysLotteryPhase.seated
           ? capturedBallIndex
@@ -434,13 +517,11 @@ class WhoPaysLotterySimulation {
   }
 
   /// Reduced-motion'da kazanan, aynı seed ve başlangıç durumuyla kurulan
-  /// gölge kopyanın sona kadar koşulmasıyla öğrenilir. Gölge burada
+  /// gölge kopyanın fiziksel sonucuna göre belirlenir. Gölge burada
   /// güvenlidir: reduced motion fizik koşumu render etmez, ayrışabileceği
   /// bir görsel koşum yoktur. Ana örneğin [balls] listesi mutasyona uğramaz.
-  int _resolveReducedMotionCaptured() {
-    final live = _capturedBallIndex;
-    if (live != null) return live;
-    final cached = _reducedMotionCaptured;
+  WhoPaysLotterySimulation _resolveReducedMotionShadow() {
+    final cached = _reducedMotionShadow;
     if (cached != null) return cached;
     final shadow = WhoPaysLotterySimulation(
       personCount: personCount,
@@ -448,35 +529,20 @@ class WhoPaysLotterySimulation {
       initialState: _initialState,
     );
     var target = 0.0;
-    while (target < shadow.durationSeconds - 1e-9) {
-      target = min(target + 1 / 60, shadow.durationSeconds);
+    final limit = shadow.durationSeconds + maxPostDurationWaitSeconds;
+    while (!shadow.isPhysicallySeated && !shadow.isStalled && target < limit) {
+      target = min(target + 1 / 60, limit);
       shadow.advanceTo(target);
     }
-    return _reducedMotionCaptured = shadow._capturedBallIndex!;
+    _reducedMotionCaptured = shadow.capturedBallIndex;
+    _reducedMotionSeated = shadow.isPhysicallySeated;
+    _reducedMotionStalled = !_reducedMotionSeated;
+    return _reducedMotionShadow = shadow;
   }
 
   List<Offset> _reducedMotionEndPositions() {
-    final positions = List<Offset>.from(_reducedMotionStartPositions);
-    final winnerIndex = _resolveReducedMotionCaptured();
-    positions[winnerIndex] = const Offset(0, winnerSeatY);
-    final intakeBallIndex = _intakeBallIndex;
-    if (intakeBallIndex != null && intakeBallIndex != winnerIndex) {
-      // Önceki kazanan fanusa döner: diğer görünen toplarla çakışmayan ilk
-      // taban slotu.
-      for (final angle in floorSlotAngles) {
-        final candidate = Offset.fromDirection(angle, maxBallCenterRadius);
-        final overlaps = positions.asMap().entries.any(
-          (entry) =>
-              entry.key != intakeBallIndex &&
-              (entry.value - candidate).distance < ballRadius * 2,
-        );
-        if (!overlaps) {
-          positions[intakeBallIndex] = candidate;
-          break;
-        }
-      }
-    }
-    return positions;
+    final shadow = _resolveReducedMotionShadow();
+    return List<Offset>.from(shadow.renderPositions);
   }
 
   void _initializeBalls() {
@@ -548,14 +614,10 @@ class WhoPaysLotterySimulation {
     final stepGateProgress = _gateProgressAt(stepTime);
     final settling = drawTime >= _mixingEnd;
     final capturing = drawTime >= _settlingEnd;
-
-    // Son çare: garanti penceresi açıldı ve fizik hâlâ hiçbir topu ağızdan
-    // düşürmediyse, ağza O ANDA en yakın top atanır — endeks önseli yok.
-    if (_capturedBallIndex == null &&
-        capturing &&
-        drawTime >= _captureEnd - _guaranteeWindow) {
-      _capturedBallIndex = _nearestToMouth();
-    }
+    final previousPositions = List<Offset>.generate(
+      balls.length,
+      (index) => balls[index].position,
+    );
 
     for (var index = 0; index < balls.length; index++) {
       final ball = balls[index];
@@ -595,12 +657,14 @@ class WhoPaysLotterySimulation {
         // eşit — tarafsızlık bozulmaz. Az toplu çekilişlerde karışım sonu
         // yüksekte kalan toplar başka türlü kapak penceresine yetişemiyor.
         final inSettleWindow =
-            drawTime >= _mixingEnd &&
-            (drawTime < _settlingEnd || _capturedBallIndex == null);
+            drawTime >= _mixingEnd && drawTime < _settlingEnd;
         // Yakalanan top tüpe geçtikten sonra kaybedenler de aynı yardımla
         // tabana iner — son kare donmadan önce havada top kalmasın.
         final loserHomeStretch =
-            capturing && !isCaptured && _capturedReachedTube;
+            capturing &&
+            drawTime <= _idleDuration + 1e-9 &&
+            !isCaptured &&
+            _capturedReachedTube;
         acceleration = Offset(
           0,
           (inSettleWindow || loserHomeStretch)
@@ -625,7 +689,8 @@ class WhoPaysLotterySimulation {
           if (distance > 1) {
             // Taban güç: drenaj sıfırdan değil %30 güçten başlar ki kapak
             // açılır açılmaz yığın ağza yönelsin.
-            acceleration += toMouth / distance * (drainRampMax * (0.3 + 0.7 * ramp));
+            acceleration +=
+                toMouth / distance * (drainRampMax * (0.3 + 0.7 * ramp));
           }
         }
 
@@ -661,7 +726,7 @@ class WhoPaysLotterySimulation {
                 transitSweepStrength;
             pull = wallSpring + sweep - ball.velocity * suctionDampingRate;
           }
-          acceleration += _clampMagnitude(pull, suctionGuaranteeMax);
+          acceleration += _clampMagnitude(pull, captureTransitMaxForce);
           targetedForceApplications++;
         } else if (_capturedBallIndex != null &&
             capturing &&
@@ -711,6 +776,7 @@ class WhoPaysLotterySimulation {
     // çakışmalar aynı adımın kalan pass'lerinde çözülebilsin.
     for (var i = 0; i < _ridgeShiftBudget.length; i++) {
       _ridgeShiftBudget[i] = postMixSeparationCap;
+      _contactBudget[i] = postMixSeparationCap;
     }
 
     var maxImpactSpeed = 0.0;
@@ -726,7 +792,7 @@ class WhoPaysLotterySimulation {
       );
     }
 
-    _assignCaptureIfEntered(drawTime, stepGateProgress);
+    _assignCaptureIfEntered(drawTime, stepGateProgress, previousPositions);
 
     final postMix = drawTime >= _mixingEnd;
     for (var index = 0; index < balls.length; index++) {
@@ -745,33 +811,48 @@ class WhoPaysLotterySimulation {
       if (index == _capturedBallIndex) {
         final capturedSpeed = ball.velocity.distance;
         if (capturedSpeed > winnerCaptureMaxSpeed) {
-          ball.velocity =
-              ball.velocity / capturedSpeed * winnerCaptureMaxSpeed;
+          ball.velocity = ball.velocity / capturedSpeed * winnerCaptureMaxSpeed;
         }
       }
     }
     return maxImpactSpeed;
   }
 
-  /// Doğal yakalama ataması: kapak yeterince açıkken huni bandına girmiş
-  /// toplar arasından ağza en yakın olan seçilir. Endeks yalnız eşitlik
-  /// kırıcı bile değildir — ölçüt tamamen geometriktir.
-  void _assignCaptureIfEntered(double drawTime, double stepGateProgress) {
+  /// Doğal yakalama ataması: kapak yeterince açıkken fizik adımında huni
+  /// girişini geçen top seçilir. Deliğe girmemiş bir top, ağza yakınlığı
+  /// nedeniyle kazanan olamaz.
+  void _assignCaptureIfEntered(
+    double drawTime,
+    double stepGateProgress,
+    List<Offset> previousPositions,
+  ) {
     if (_capturedBallIndex != null) return;
     if (drawTime < _settlingEnd || stepGateProgress <= gateOpenForCapture) {
       return;
     }
     int? best;
+    var bestDepth = -double.infinity;
     var bestDistance = double.infinity;
     for (var index = 0; index < balls.length; index++) {
+      final previous = previousPositions[index];
+      final ball = balls[index];
       final position = balls[index].position;
       if (position.dy < tubeEntryY ||
           position.dx.abs() > funnelHalfWidthAt(position.dy)) {
         continue;
       }
+      final crossedEntry =
+          previous.dy < tubeEntryY && position.dy >= tubeEntryY;
+      final continuedDownward =
+          previous.dy >= tubeEntryY &&
+          position.dy >= previous.dy - 0.01 &&
+          ball.velocity.dy > 0;
+      if (!crossedEntry && !continuedDownward) continue;
       final distance = (position - mouthTarget).distance;
-      if (distance < bestDistance) {
+      if (position.dy > bestDepth ||
+          (position.dy == bestDepth && distance < bestDistance)) {
         bestDistance = distance;
+        bestDepth = position.dy;
         best = index;
       }
     }
@@ -780,25 +861,14 @@ class WhoPaysLotterySimulation {
     }
   }
 
-  /// Ağza (mouthTarget'a) en yakın topun endeksi — son-çare ve donma-karesi
-  /// garantilerinin ortak "en yakın kazanır" kuralı.
-  int _nearestToMouth() {
-    var best = 0;
-    var bestDistance = double.infinity;
-    for (var index = 0; index < balls.length; index++) {
-      final distance = (balls[index].position - mouthTarget).distance;
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        best = index;
-      }
-    }
-    return best;
-  }
-
   double _resolveBallCollisions(double drawTime) {
     var maxImpactSpeed = 0.0;
     const minimumDistance = ballRadius * 2;
-    final restitution = drawTime < _mixingEnd ? ballRestitution : 0.16;
+    final restitution = drawTime > _idleDuration + 1e-9
+        ? 0.0
+        : drawTime < _mixingEnd
+        ? ballRestitution
+        : 0.16;
 
     for (var firstIndex = 0; firstIndex < balls.length; firstIndex++) {
       for (
@@ -838,12 +908,16 @@ class WhoPaysLotterySimulation {
             : halfPush;
 
         if (firstIsCaptureWinner) {
-          second.position += normal * cappedFull;
+          second.position +=
+              normal * _contactPush(secondIndex, cappedFull, drawTime);
         } else if (secondIsCaptureWinner) {
-          first.position -= normal * cappedFull;
+          first.position -=
+              normal * _contactPush(firstIndex, cappedFull, drawTime);
         } else {
-          first.position -= normal * cappedHalf;
-          second.position += normal * cappedHalf;
+          first.position -=
+              normal * _contactPush(firstIndex, cappedHalf, drawTime);
+          second.position +=
+              normal * _contactPush(secondIndex, cappedHalf, drawTime);
         }
 
         final relativeVelocity = second.velocity - first.velocity;
@@ -910,7 +984,8 @@ class WhoPaysLotterySimulation {
       final rotorPush = drawTime >= _mixingEnd
           ? min(contact.penetration, postMixSeparationCap)
           : contact.penetration;
-      ball.position += contact.normal * (rotorPush + 0.05);
+      ball.position +=
+          contact.normal * _contactPush(ballIndex, rotorPush + 0.05, drawTime);
       final surfaceVelocity = Offset(
         -contact.point.dy * angularVelocity,
         contact.point.dx * angularVelocity,
@@ -919,7 +994,11 @@ class WhoPaysLotterySimulation {
       final approachSpeed = _dot(relativeVelocity, contact.normal);
       if (approachSpeed >= 0) continue;
 
-      final normalImpulse = -(1 + bladeRestitution) * approachSpeed;
+      final restitution =
+          drawTime > _idleDuration + 1e-9 && approachSpeed.abs() < 12
+          ? 0.0
+          : bladeRestitution;
+      final normalImpulse = -(1 + restitution) * approachSpeed;
       ball.velocity += contact.normal * normalImpulse;
 
       final tangent = Offset(-contact.normal.dy, contact.normal.dx);
@@ -1017,7 +1096,9 @@ class WhoPaysLotterySimulation {
           _phaseShift > 0 &&
           ball.position.dy >= tubeEntryY;
 
-      if (capturedInTube || intakeInTube || (mouthOpenForEntry && inFunnelBand)) {
+      if (capturedInTube ||
+          intakeInTube ||
+          (mouthOpenForEntry && inFunnelBand)) {
         final halfWidth = funnelHalfWidthAt(ball.position.dy);
         if (ball.position.dx.abs() > halfWidth) {
           final normal = Offset(ball.position.dx.sign, 0);
@@ -1030,6 +1111,9 @@ class WhoPaysLotterySimulation {
         }
         if (ball.position.dy >= winnerSeatY) {
           maxImpactSpeed = max(maxImpactSpeed, max(0, ball.velocity.dy));
+          if (index == _capturedBallIndex) {
+            _capturedReachedSeat = true;
+          }
           ball
             ..position = const Offset(0, winnerSeatY)
             ..velocity = Offset.zero;
@@ -1082,7 +1166,11 @@ class WhoPaysLotterySimulation {
       if (normalSpeed <= 0) continue;
 
       maxImpactSpeed = max(maxImpactSpeed, normalSpeed);
-      final restitution = drawTime < _mixingEnd ? wallRestitution : 0.12;
+      final restitution = drawTime > _idleDuration + 1e-9 && normalSpeed < 12
+          ? 0.0
+          : drawTime < _mixingEnd
+          ? wallRestitution
+          : 0.12;
       ball.velocity -= normal * ((1 + restitution) * normalSpeed);
     }
     return maxImpactSpeed;
@@ -1116,39 +1204,6 @@ class WhoPaysLotterySimulation {
     renderPositions
       ..clear()
       ..addAll(balls.map((ball) => ball.position));
-  }
-
-  /// Deterministically parks every loser on the floor arc. Used only when the
-  /// timeline finishes via a resume/background jump, so the last frame never
-  /// shows balls frozen mid-air.
-  void _settleLosersToFloor() {
-    assert(
-      balls.length - 1 <= floorSlotAngles.length,
-      'floor slots must cover every loser',
-    );
-    final used = List<bool>.filled(floorSlotAngles.length, false);
-    for (var index = 0; index < balls.length; index++) {
-      if (index == _capturedBallIndex) continue;
-      final currentAngle = balls[index].position.direction;
-      var best = 0;
-      var bestDifference = double.infinity;
-      for (var slot = 0; slot < floorSlotAngles.length; slot++) {
-        if (used[slot]) continue;
-        final raw = floorSlotAngles[slot] - currentAngle;
-        final difference = atan2(sin(raw), cos(raw)).abs();
-        if (difference < bestDifference) {
-          bestDifference = difference;
-          best = slot;
-        }
-      }
-      used[best] = true;
-      balls[index]
-        ..position = Offset.fromDirection(
-          floorSlotAngles[best],
-          maxBallCenterRadius,
-        )
-        ..velocity = Offset.zero;
-    }
   }
 
   WhoPaysLotteryPhase _phaseFor(double seconds) {
@@ -1265,9 +1320,11 @@ class _RotorContact {
 class WhoPaysInitialState {
   const WhoPaysInitialState({
     required this.chamberPositions,
+    this.chamberVelocities,
     this.seatedBallIndex,
   });
 
   final List<Offset> chamberPositions;
+  final List<Offset>? chamberVelocities;
   final int? seatedBallIndex;
 }
