@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
+
 import 'package:flutter/gestures.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -22,6 +24,9 @@ import 'licensing/feature_sync_service.dart';
 import 'licensing/license_activation_screen.dart';
 import 'licensing/license_config.dart';
 import 'licensing/update_service.dart';
+import 'menu/menu_models.dart';
+import 'menu/menu_service.dart';
+import 'menu/menu_image_view.dart';
 import 'analytics/analytics_service.dart';
 import 'analytics/analytics_event.dart';
 import 'src/who_pays/lottery_machine_view.dart';
@@ -225,6 +230,7 @@ void _openLicenseUpgradeDialog(BuildContext context) {
   Navigator.of(context).push(
     MaterialPageRoute(
       builder: (context) => LicenseActivationScreen(
+        upgradeMode: true,
         onActivated: () {
           Navigator.of(context).pop();
         },
@@ -388,6 +394,9 @@ class _LuuqSettings {
   String? baristaDrink;
   String? baristaDessert;
   List<String>? wheelItems;
+  List<String>? wheelItemIds;
+  String? baristaDrinkId;
+  String? baristaDessertId;
 
   Future<File> _getFile() async {
     try {
@@ -419,16 +428,29 @@ class _LuuqSettings {
         volume = (jsonMap['volume'] as num?)?.toDouble() ?? 1.0;
         baristaDrink = jsonMap['baristaDrink'] as String?;
         baristaDessert = jsonMap['baristaDessert'] as String?;
+        baristaDrinkId = jsonMap['baristaDrinkId'] as String?;
+        baristaDessertId = jsonMap['baristaDessertId'] as String?;
 
         final list = jsonMap['wheelItems'] as List<dynamic>?;
         if (list != null) {
           wheelItems = list.cast<String>();
         }
+        final ids = jsonMap['wheelItemIds'] as List<dynamic>?;
+        if (ids != null) wheelItemIds = ids.cast<String>();
       }
     } catch (_) {}
   }
 
-  Future<bool> save() async {
+  /// Saves run one after another; each writes the values current at its turn.
+  Future<bool> _saveChain = Future<bool>.value(true);
+
+  Future<bool> save() {
+    final next = _saveChain.then((_) => _saveNow(), onError: (_) => _saveNow());
+    _saveChain = next;
+    return next;
+  }
+
+  Future<bool> _saveNow() async {
     try {
       final file = await _getFile();
       final jsonMap = {
@@ -437,8 +459,15 @@ class _LuuqSettings {
         'baristaDrink': baristaDrink,
         'baristaDessert': baristaDessert,
         'wheelItems': wheelItems,
+        'baristaDrinkId': baristaDrinkId,
+        'baristaDessertId': baristaDessertId,
+        'wheelItemIds': wheelItemIds,
       };
-      await file.writeAsString(json.encode(jsonMap));
+      // Write a temp file and rename it over the old one: a power cut during
+      // the write leaves the previous settings intact instead of a cut file.
+      final temp = File('${file.path}.tmp');
+      await temp.writeAsString(json.encode(jsonMap), flush: true);
+      await temp.rename(file.path);
       return true;
     } catch (error, stackTrace) {
       debugPrint(
@@ -555,8 +584,7 @@ const Map<String, String> _menuDict = {
       'Fun and refreshing flavors full of popping boba pearls.',
   'Kıvamlı, yoğun ve tatlı krizlerine birebir sütlü serinlik.':
       'Thick, creamy milkshakes for your sweet cravings.',
-  'Yaz aylarının en serinletici ve leziz dondurma çeşitleri.':
-      'The most refreshing and delicious ice cream varieties of the summer months.',
+  'Yaz aylarının en serinletici ve leziz dondurma çeşitleri.': 'The most refreshing and delicious ice cream varieties of the summer months.',
   'Klasik gazozlar, doğal sodalar ve enerji veren içecekler.':
       'Classic sodas, natural sparkling waters and energy drinks.',
   'Kahvenize mükemmel eşlik edecek taptaze, el yapımı tatlılar.':
@@ -1044,10 +1072,61 @@ const Map<String, String> _menuDict = {
   'Yulaf Süt': 'Oat Milk',
 };
 
+final Map<String, IconData> _activeMenuCategoryIcons = <String, IconData>{};
+final Map<String, String> _activeMenuCategoryDescriptions = <String, String>{};
+final Map<String, String> _activeMenuCategoryDescriptionsEn =
+    <String, String>{};
+final Map<String, String> _activeMenuCategoryNamesEn = <String, String>{};
+
 String trMenu(String text) {
   if (appLanguageNotifier.value == AppLanguage.tr) return text;
   return _menuDict[text] ?? text;
 }
+
+/// Remote catalogs default missing English text to the Turkish value, so an
+/// English field that is blank or identical to Turkish counts as untranslated
+/// and falls through to the bundled dictionary.
+String? _translatedOrNull(String? english, String turkish) {
+  if (english == null) return null;
+  final trimmed = english.trim();
+  return trimmed.isEmpty || trimmed == turkish.trim() ? null : english;
+}
+
+String _menuItemName(_MenuItem item) => menuTextForLanguage(
+  turkish: item.name,
+  english: _translatedOrNull(item.nameEn, item.name) ?? _menuDict[item.name],
+  useEnglish: appLanguageNotifier.value == AppLanguage.en,
+);
+String _menuItemDescription(_MenuItem item) => menuTextForLanguage(
+  turkish: item.desc,
+  english: _translatedOrNull(item.descEn, item.desc) ?? _menuDict[item.desc],
+  useEnglish: appLanguageNotifier.value == AppLanguage.en,
+);
+String _menuItemTag(_MenuItem item, String tag) {
+  final index = item.tags.indexOf(tag);
+  final english = index >= 0 && index < item.tagsEn.length
+      ? item.tagsEn[index]
+      : null;
+  return menuTextForLanguage(
+    turkish: tag,
+    english: _translatedOrNull(english, tag) ?? _menuDict[tag],
+    useEnglish: appLanguageNotifier.value == AppLanguage.en,
+  );
+}
+
+String _menuCategoryName(String categoryKey) => menuTextForLanguage(
+  turkish: categoryKey,
+  english:
+      _translatedOrNull(_activeMenuCategoryNamesEn[categoryKey], categoryKey) ??
+      _menuDict[categoryKey],
+  useEnglish: appLanguageNotifier.value == AppLanguage.en,
+);
+String _menuCategoryDescription(String categoryKey) =>
+    appLanguageNotifier.value == AppLanguage.en
+    ? _activeMenuCategoryDescriptionsEn[categoryKey] ??
+          _activeMenuCategoryDescriptions[categoryKey] ??
+          ''
+    : _activeMenuCategoryDescriptions[categoryKey] ?? '';
 
 class LuuqApp extends StatelessWidget {
   const LuuqApp({super.key});
@@ -1063,9 +1142,10 @@ class LuuqApp extends StatelessWidget {
           title: 'LUUQ Kiosk',
           builder: (context, child) {
             return MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: const TextScaler.linear(1.0)),
+              data: MediaQuery.of(context).copyWith(
+                textScaler: MediaQuery.textScalerOf(context)
+                    .clamp(minScaleFactor: 1.0, maxScaleFactor: 1.2),
+              ),
               child: child!,
             );
           },
@@ -1108,6 +1188,17 @@ class LuuqApp extends StatelessWidget {
   }
 }
 
+bool isVideoReadyForRender(
+  VideoPlayerValue value, {
+  required bool unavailable,
+}) {
+  return !unavailable &&
+      value.isInitialized &&
+      !value.hasError &&
+      value.size.width > 0 &&
+      value.size.height > 0;
+}
+
 class CafeKioskScreen extends StatefulWidget {
   const CafeKioskScreen({super.key});
 
@@ -1141,6 +1232,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   _MenuItem? _baristaDrink;
   _MenuItem? _baristaDessert;
   late List<_MenuItem> _wheelMenuItems = _defaultWheelMenuItems();
+  MenuCatalog? _pendingRemoteCatalog;
+  bool _pendingBundledRestore = false;
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
   bool _hasTrackedUpdateSeen = false;
@@ -1239,6 +1332,11 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
   // AFK background video
   VideoPlayerController? _videoController;
+  final Set<VideoPlayerController> _disposedVideoControllers =
+      <VideoPlayerController>{};
+  int _videoInitGeneration = 0;
+  bool _videoUnavailable = false;
+  bool _videoFailureLogged = false;
 
   List<Drink> get _filteredDrinks {
     final wheelDrinks = _wheelMenuItems.map(_drinkFromMenuItem).toList();
@@ -1263,6 +1361,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   }
 
   void _resetIdleTimer({bool fromTap = false}) {
+    _tryApplyPendingRemoteMenu();
     _idleTimer?.cancel();
     if (_isInCleaningMode) return;
     if (GlobalDialogTracker.shouldPauseIdleTimer()) return;
@@ -1270,7 +1369,10 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       if (!fromTap) return;
       setState(() => _isIdle = false);
     }
-    _idleTimer = Timer(const Duration(seconds: 15), () {
+    final idleTimeout = GlobalDialogTracker.isAdminSessionOpen
+        ? const Duration(seconds: 90)
+        : const Duration(seconds: 15);
+    _idleTimer = Timer(idleTimeout, () {
       if (_isInCleaningMode) return;
       if (GlobalDialogTracker.shouldPauseIdleTimer()) return;
       if (mounted && !_spinController.isAnimating) {
@@ -1282,15 +1384,16 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
           _showResult = false;
           _selectedMood = null;
         });
-        if (_videoController != null && _videoController!.value.isInitialized) {
-          _videoController!.play();
+        if (!MediaQuery.disableAnimationsOf(context) &&
+            _videoController != null) {
+          unawaited(_playVideoIfAllowed(_videoController!));
         }
       }
     });
   }
 
   _MenuItem? _findMenuItemByName(String name) {
-    for (final list in _menuCategories.values) {
+    for (final list in _currentMenuCategories.values) {
       for (final item in list) {
         if (item.name == name) {
           return item;
@@ -1298,6 +1401,205 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       }
     }
     return null;
+  }
+
+  _MenuItem? _findMenuItemById(String id) {
+    for (final list in _currentMenuCategories.values) {
+      for (final item in list) {
+        if (item.id == id) return item;
+      }
+    }
+    return null;
+  }
+
+  /// Tells the admin whether a wheel/barista change reached the server. The
+  /// change is already applied and saved locally; this only reports sync.
+  void _reportMenuPush(Future<MenuPushResult> push) {
+    unawaited(
+      push.then((result) {
+        if (!mounted || result == MenuPushResult.localOnly) return;
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        if (messenger == null) return;
+        final text = switch (result) {
+          MenuPushResult.saved => tr(
+            'Değişiklik sunucuya kaydedildi.',
+            'Change saved to the server.',
+          ),
+          MenuPushResult.queued => tr(
+            'Bu kioskta kaydedildi; bağlantı gelince sunucuya gönderilecek.',
+            'Saved on this kiosk; it will be sent when the connection returns.',
+          ),
+          MenuPushResult.rejected => tr(
+            'Sunucu bu seçimi kabul etmedi (ürün bu kioskun menüsünde yok ya da özellik kapalı).',
+            'The server rejected this choice (item not on this kiosk menu or feature disabled).',
+          ),
+          MenuPushResult.localOnly => '',
+        };
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              text,
+              style: const TextStyle(
+                color: _cream,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            backgroundColor: const Color(0xFF231E2D),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }),
+    );
+  }
+
+  void _handleRemoteMenuChanged() {
+    final catalog = MenuService.instance.catalogNotifier.value;
+    final busy =
+        GlobalDialogTracker.shouldDeferMenuChanges() ||
+        _spinController.isAnimating;
+    if (catalog == null) {
+      _pendingRemoteCatalog = null;
+      if (_activeMenuCategories.isEmpty) return;
+      // Like a new catalog, the switch back to the bundled menu waits until
+      // no spin or admin dialog is using the current items.
+      if (busy) {
+        _pendingBundledRestore = true;
+        return;
+      }
+      _restoreBundledMenu();
+      return;
+    }
+    _pendingBundledRestore = false;
+    if (busy) {
+      _pendingRemoteCatalog = catalog;
+      return;
+    }
+    _applyRemoteCatalogToScreen(catalog);
+  }
+
+  void _tryApplyPendingRemoteMenu() {
+    if (GlobalDialogTracker.shouldDeferMenuChanges() ||
+        _spinController.isAnimating) {
+      return;
+    }
+    if (_pendingBundledRestore) {
+      _pendingBundledRestore = false;
+      if (_activeMenuCategories.isNotEmpty) _restoreBundledMenu();
+      return;
+    }
+    final catalog = _pendingRemoteCatalog;
+    if (catalog == null) return;
+    _pendingRemoteCatalog = null;
+    _applyRemoteCatalogToScreen(catalog);
+  }
+
+  /// The menu feature was turned off, the license was revoked or the device
+  /// moved to a profile with no cached catalog: drop the previous profile's
+  /// remote catalog and resolve the wheel/barista against the bundled menu.
+  void _restoreBundledMenu() {
+    _activeMenuCategories = <String, List<_MenuItem>>{};
+    _activeMenuCategoryIcons.clear();
+    _activeMenuCategoryDescriptions.clear();
+    _activeMenuCategoryDescriptionsEn.clear();
+    _activeMenuCategoryNamesEn.clear();
+    _activeMenuCategoryNamesById.clear();
+    final bundledWheel = (_LuuqSettings.instance.wheelItems ?? const <String>[])
+        .map(_findMenuItemByName)
+        .whereType<_MenuItem>()
+        .toList(growable: false);
+    final settings = _LuuqSettings.instance;
+    final drink = settings.baristaDrink == null
+        ? null
+        : _findMenuItemByName(settings.baristaDrink!);
+    final dessert = settings.baristaDessert == null
+        ? null
+        : _findMenuItemByName(settings.baristaDessert!);
+    if (!mounted) return;
+    setState(() {
+      _wheelMenuItems = bundledWheel.length == 8
+          ? bundledWheel
+          : _defaultWheelMenuItems();
+      _baristaDrink = drink;
+      _baristaDessert = dessert;
+      _selectedDrink = null;
+      _showResult = false;
+    });
+  }
+
+  /// The locally saved barista pick resolved against the current catalog.
+  _MenuItem? _savedBaristaItem({required bool drink}) {
+    final settings = _LuuqSettings.instance;
+    final id = drink ? settings.baristaDrinkId : settings.baristaDessertId;
+    final name = drink ? settings.baristaDrink : settings.baristaDessert;
+    return (id == null ? null : _findMenuItemById(id)) ??
+        (name == null ? null : _findMenuItemByName(name));
+  }
+
+  void _applyRemoteCatalogToScreen(MenuCatalog catalog) {
+    _applyRemoteMenuCatalog(catalog);
+    // A local wheel/barista change still queued for the server must not be
+    // overwritten by the (older) server value.
+    final wheelPending = MenuService.instance.hasPendingConfig('wheel');
+    final baristaPending = MenuService.instance.hasPendingConfig('barista');
+    final remoteWheel = wheelPending
+        ? const <_MenuItem>[]
+        : catalog.wheelItemIds
+              .map(_findMenuItemById)
+              .whereType<_MenuItem>()
+              .toList(growable: false);
+    final configuredWheel = remoteWheel.length == 8
+        ? remoteWheel
+        : (_LuuqSettings.instance.wheelItemIds ?? const <String>[])
+              .map(_findMenuItemById)
+              .whereType<_MenuItem>()
+              .toList(growable: false);
+    final migratedWheel = configuredWheel.length == 8
+        ? configuredWheel
+        : (_LuuqSettings.instance.wheelItems ?? const <String>[])
+              .map(_findMenuItemByName)
+              .whereType<_MenuItem>()
+              .toList(growable: false);
+    final drink = baristaPending || catalog.baristaDrinkId == null
+        ? (baristaPending ? _savedBaristaItem(drink: true) : null)
+        : _findMenuItemById(catalog.baristaDrinkId!);
+    final dessert = baristaPending || catalog.baristaDessertId == null
+        ? (baristaPending ? _savedBaristaItem(drink: false) : null)
+        : _findMenuItemById(catalog.baristaDessertId!);
+    if (migratedWheel.length == 8) {
+      _LuuqSettings.instance.wheelItemIds = migratedWheel
+          .map((item) => item.id)
+          .whereType<String>()
+          .toList(growable: false);
+      _LuuqSettings.instance.wheelItems = migratedWheel
+          .map((item) => item.name)
+          .toList(growable: false);
+    }
+    final migratedDrink =
+        drink ??
+        (_LuuqSettings.instance.baristaDrink == null
+            ? null
+            : _findMenuItemByName(_LuuqSettings.instance.baristaDrink!));
+    final migratedDessert =
+        dessert ??
+        (_LuuqSettings.instance.baristaDessert == null
+            ? null
+            : _findMenuItemByName(_LuuqSettings.instance.baristaDessert!));
+    if (migratedDrink != null) {
+      _LuuqSettings.instance.baristaDrinkId = migratedDrink.id;
+      _LuuqSettings.instance.baristaDrink = migratedDrink.name;
+    }
+    if (migratedDessert != null) {
+      _LuuqSettings.instance.baristaDessertId = migratedDessert.id;
+      _LuuqSettings.instance.baristaDessert = migratedDessert.name;
+    }
+    unawaited(_LuuqSettings.instance.save());
+    if (mounted) {
+      setState(() {
+        if (migratedWheel.length == 8) _wheelMenuItems = migratedWheel;
+        if (migratedDrink != null) _baristaDrink = migratedDrink;
+        if (migratedDessert != null) _baristaDessert = migratedDessert;
+      });
+    }
   }
 
   @override
@@ -1310,8 +1612,16 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       _handleLicenseStatusChange,
     );
 
-    // Load persisted wheel items
-    if (_LuuqSettings.instance.wheelItems != null) {
+    // Load persisted stable IDs first; names remain a one-time legacy fallback.
+    final savedWheelIds = _LuuqSettings.instance.wheelItemIds;
+    final loadedById = (savedWheelIds ?? const <String>[])
+        .map(_findMenuItemById)
+        .whereType<_MenuItem>()
+        .toList();
+    if (loadedById.length == 8) {
+      _wheelMenuItems = loadedById;
+    } else if (_LuuqSettings.instance.wheelItems != null) {
+      // Bundled menu items carry no stable id, so names stay the fallback.
       final loadedItems = _LuuqSettings.instance.wheelItems!
           .map(_findMenuItemByName)
           .whereType<_MenuItem>()
@@ -1323,12 +1633,14 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
     // Load persisted barista picks
     if (_LuuqSettings.instance.baristaDrink != null) {
-      _baristaDrink = _findMenuItemByName(_LuuqSettings.instance.baristaDrink!);
+      _baristaDrink = _LuuqSettings.instance.baristaDrinkId == null
+          ? _findMenuItemByName(_LuuqSettings.instance.baristaDrink!)
+          : _findMenuItemById(_LuuqSettings.instance.baristaDrinkId!);
     }
     if (_LuuqSettings.instance.baristaDessert != null) {
-      _baristaDessert = _findMenuItemByName(
-        _LuuqSettings.instance.baristaDessert!,
-      );
+      _baristaDessert = _LuuqSettings.instance.baristaDessertId == null
+          ? _findMenuItemByName(_LuuqSettings.instance.baristaDessert!)
+          : _findMenuItemById(_LuuqSettings.instance.baristaDessertId!);
     }
 
     GestureBinding.instance.pointerRouter.addGlobalRoute(
@@ -1349,6 +1661,14 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
+    MenuService.instance.catalogNotifier.addListener(_handleRemoteMenuChanged);
+    unawaited(_loadRunningAppVersion());
+    _handleRemoteMenuChanged();
+    unawaited(
+      MenuService.instance.syncNow(
+        status: LicenseService.instance.currentStatus,
+      ),
+    );
 
     _isAppActive =
         WidgetsBinding.instance.lifecycleState == null ||
@@ -1370,36 +1690,178 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     });
   }
 
-  Future<void> _initVideo() async {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotionPreference();
+  }
+
+  void _disposeVideoController(VideoPlayerController controller) {
+    if (!_disposedVideoControllers.add(controller)) return;
+    controller.removeListener(_handleVideoValueChanged);
+    unawaited(_disposeVideoControllerSafely(controller));
+  }
+
+  Future<void> _disposeVideoControllerSafely(
+    VideoPlayerController controller,
+  ) async {
     try {
+      await controller.dispose();
+    } catch (error) {
+      debugPrint('[VIDEO] dispose failed: $error');
+    }
+  }
+
+  void _disableVideo({
+    VideoPlayerController? controller,
+    required String reason,
+    Object? error,
+  }) {
+    _videoInitGeneration++;
+    _videoUnavailable = true;
+    final target = controller ?? _videoController;
+    if (identical(_videoController, target)) {
+      _videoController = null;
+    }
+    if (target != null) _disposeVideoController(target);
+
+    if (!_videoFailureLogged) {
+      _videoFailureLogged = true;
+      final detail = error == null ? '' : ' error=$error';
+      debugPrint('[VIDEO] disabled: $reason.$detail');
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _handleVideoValueChanged() {
+    final controller = _videoController;
+    if (controller == null || !controller.value.hasError) return;
+    _disableVideo(
+      controller: controller,
+      reason: 'native playback error',
+      error: controller.value.errorDescription,
+    );
+  }
+
+  Future<void> _playVideoIfAllowed(VideoPlayerController controller) async {
+    if (!mounted ||
+        _videoUnavailable ||
+        !identical(_videoController, controller) ||
+        !isVideoReadyForRender(controller.value, unavailable: false)) {
+      return;
+    }
+    try {
+      await controller.play();
+    } catch (error) {
+      if (identical(_videoController, controller)) {
+        _disableVideo(
+          controller: controller,
+          reason: 'playback start failed',
+          error: error,
+        );
+      }
+    }
+  }
+
+  Future<void> _pauseVideoIfReady(VideoPlayerController controller) async {
+    if (!controller.value.isInitialized || controller.value.hasError) return;
+    try {
+      await controller.pause();
+    } catch (error) {
+      if (identical(_videoController, controller)) {
+        _disableVideo(
+          controller: controller,
+          reason: 'pause failed',
+          error: error,
+        );
+      }
+    }
+  }
+
+  void _syncMotionPreference() {
+    final controller = _videoController;
+    if (MediaQuery.disableAnimationsOf(context) || !_isAppActive) {
+      _pulseController.stop();
+      _pulseController.value = 0.5;
+      if (controller != null) {
+        unawaited(_pauseVideoIfReady(controller));
+      }
+    } else {
+      if (!_pulseController.isAnimating) _pulseController.repeat(reverse: true);
+      if (controller != null) {
+        unawaited(_playVideoIfAllowed(controller));
+      }
+    }
+  }
+
+  Future<void> _initVideo() async {
+    final generation = ++_videoInitGeneration;
+    VideoPlayerController? controller;
+    try {
+      _videoUnavailable = false;
       if (Platform.isWindows) {
-        // Add a small delay to prevent D3D surface binding errors during hot restart
+        // Let the Windows runner finish creating its graphics surface before
+        // the native video plugin allocates its shared texture.
         await Future.delayed(const Duration(milliseconds: 300));
+        if (!mounted || generation != _videoInitGeneration) return;
 
         // On Windows, asset videos must be loaded from the data directory
         final exePath = Platform.resolvedExecutable;
         final exeDir = File(exePath).parent.path;
-        final videoPath = '$exeDir/data/flutter_assets/assets/luuqtanitim.mp4';
-        _videoController = VideoPlayerController.file(File(videoPath));
+        final videoFile = File(
+          '$exeDir${Platform.pathSeparator}data${Platform.pathSeparator}'
+          'flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}'
+          'luuqtanitim.mp4',
+        );
+        if (!await videoFile.exists()) {
+          _disableVideo(reason: 'asset missing', error: videoFile.path);
+          return;
+        }
+        controller = VideoPlayerController.file(videoFile);
       } else {
         // On Android/iOS, natively use asset loader
-        _videoController = VideoPlayerController.asset(
-          'assets/luuqtanitim.mp4',
+        controller = VideoPlayerController.asset('assets/luuqtanitim.mp4');
+      }
+
+      if (!mounted || generation != _videoInitGeneration) {
+        _disposeVideoController(controller);
+        return;
+      }
+      _videoController = controller;
+      controller.addListener(_handleVideoValueChanged);
+      await controller.setLooping(true);
+      await controller.setVolume(0.0);
+      await controller.initialize();
+
+      if (!mounted ||
+          generation != _videoInitGeneration ||
+          !identical(_videoController, controller)) {
+        _disposeVideoController(controller);
+        return;
+      }
+      if (!isVideoReadyForRender(controller.value, unavailable: false)) {
+        _disableVideo(
+          controller: controller,
+          reason: 'initialize returned an unusable video state',
+          error: controller.value.errorDescription,
         );
+        return;
       }
 
-      await _videoController!.setLooping(true);
-      await _videoController!.setVolume(0.0);
-      await _videoController!.initialize();
-
-      if (mounted) {
-        setState(() {});
-        if (_isAppActive) {
-          _videoController!.play();
-        }
+      setState(() {});
+      if (_isAppActive && !MediaQuery.disableAnimationsOf(context)) {
+        unawaited(_playVideoIfAllowed(controller));
       }
-    } catch (e) {
-      debugPrint('Video init error: $e');
+    } catch (error) {
+      if (generation != _videoInitGeneration || !mounted) {
+        if (controller != null) _disposeVideoController(controller);
+        return;
+      }
+      _disableVideo(
+        controller: controller,
+        reason: 'initialize failed',
+        error: error,
+      );
     }
   }
 
@@ -1456,9 +1918,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     });
     AnalyticsService.instance.trackAppStarted();
     if (_isAppActive &&
-        _videoController != null &&
-        _videoController!.value.isInitialized) {
-      _videoController!.play();
+        !MediaQuery.disableAnimationsOf(context) &&
+        _videoController != null) {
+      unawaited(_playVideoIfAllowed(_videoController!));
     }
     unawaited(_precacheDeferredMenuImages(assetKeys));
   }
@@ -1484,7 +1946,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         providers.add(AssetImage(wheelPath));
       }
     }
-    for (final category in _menuCategories.values) {
+    for (final category in _currentMenuCategories.values) {
       for (final item in category) {
         final path = item.imagePath;
         if (path == null ||
@@ -1514,12 +1976,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     _isAppActive = isActive;
 
     if (isActive) {
-      if (!_pulseController.isAnimating) {
-        _pulseController.repeat(reverse: true);
-      }
-      if (_videoController?.value.isInitialized ?? false) {
-        unawaited(_videoController!.play());
-      }
+      _syncMotionPreference();
       if (!_isLoading && !_isIdle) {
         _resetIdleTimer();
       }
@@ -1528,9 +1985,86 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
     _idleTimer?.cancel();
     _pulseController.stop(canceled: false);
-    if (_videoController?.value.isInitialized ?? false) {
-      unawaited(_videoController!.pause());
+    final controller = _videoController;
+    if (controller != null) {
+      unawaited(_pauseVideoIfReady(controller));
     }
+  }
+
+  String? _runningAppVersion;
+
+  Future<void> _loadRunningAppVersion() async {
+    final version = await DeviceIdentityService.getAppVersion();
+    if (!mounted) return;
+    setState(() => _runningAppVersion = version);
+  }
+
+  /// The text of the closed-screen notice, or null when the kiosk is open.
+  ({String title, String body})? _serviceBlockMessage(LicenseStatus status) {
+    if (!status.active) return null;
+    if (status.maintenanceEnabled) {
+      final message = status.maintenanceMessage?.trim() ?? '';
+      return (
+        title: tr('Bakım Çalışması', 'Under Maintenance'),
+        body: message.isNotEmpty
+            ? message
+            : tr(
+                'Sistem bakım çalışması nedeniyle geçici olarak hizmet dışıdır. Lütfen daha sonra tekrar deneyiniz.',
+                'The system is temporarily unavailable for maintenance. Please try again later.',
+              ),
+      );
+    }
+    final current = _runningAppVersion;
+    if (current != null &&
+        VersionInfo.isBelowMinimum(current, status.minimumAppVersion)) {
+      return (
+        title: tr('Güncelleme Gerekli', 'Update Required'),
+        body: tr(
+          'Bu uygulama sürümü artık desteklenmiyor. Lütfen yöneticinize haber verin; güncelleme sol üstteki düğmeden yapılabilir.',
+          'This app version is no longer supported. Please contact the administrator; the update can be started from the button at the top left.',
+        ),
+      );
+    }
+    return null;
+  }
+
+  Widget _buildServiceBlockOverlay(({String title, String body}) message) {
+    return AbsorbPointer(
+      child: Container(
+        color: const Color(0xF216131D),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 48),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.construction_rounded,
+                color: Color(0xFFF9AB3E),
+                size: 64,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                message.title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _cream,
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                message.body,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _mutedText, fontSize: 22),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildLoadingScreen() {
@@ -1643,6 +2177,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     LicenseService.instance.statusNotifier.removeListener(
       _handleLicenseStatusChange,
     );
+    MenuService.instance.catalogNotifier.removeListener(
+      _handleRemoteMenuChanged,
+    );
     GestureBinding.instance.pointerRouter.removeGlobalRoute(
       _handleGlobalPointerEvent,
     );
@@ -1650,9 +2187,14 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     appThemeNotifier.removeListener(_handleThemeChange);
     appVolumeNotifier.removeListener(_handleVolumeChange);
     WidgetsBinding.instance.removeObserver(this);
+    _videoInitGeneration++;
+    final videoController = _videoController;
+    _videoController = null;
+    if (videoController != null) {
+      _disposeVideoController(videoController);
+    }
     _spinController.dispose();
     _pulseController.dispose();
-    _videoController?.dispose();
     _idleTimer?.cancel();
     _logoTapTimer?.cancel();
     super.dispose();
@@ -1718,12 +2260,12 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   }
 
   String _findCategoryForDrink(Drink drink) {
-    for (final entry in _menuCategories.entries) {
+    for (final entry in _currentMenuCategories.entries) {
       for (final item in entry.value) {
         // drink.fullName trMenu ile çevrilmiş addır; İngilizce modda ham
         // item.name ile eşleşmez, çevrilmiş adla da karşılaştırılmalı.
         if (item.name == drink.fullName ||
-            trMenu(item.name) == drink.fullName ||
+            _menuItemName(item) == drink.fullName ||
             item.name == drink.shortName) {
           return entry.key;
         }
@@ -1772,7 +2314,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     // 4 extra full spins for dramatic effect
     final targetTurns = _spinController.value + diff + (clockwise ? 4 : -4);
 
-    final spinDuration = duration ?? const Duration(milliseconds: 5000);
+    final spinDuration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : duration ?? const Duration(milliseconds: 5000);
     _spinController.duration = spinDuration;
 
     setState(() {
@@ -1804,6 +2348,13 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   Widget build(BuildContext context) {
     final available = _isLoading ? <Drink>[] : _filteredDrinks;
     final isSpinning = _isLoading ? false : _spinController.isAnimating;
+    final videoController = _videoController;
+    final showVideo =
+        videoController != null &&
+        isVideoReadyForRender(
+          videoController.value,
+          unavailable: _videoUnavailable,
+        );
 
     return ValueListenableBuilder<LicenseStatus>(
       valueListenable: LicenseService.instance.statusNotifier,
@@ -1822,17 +2373,20 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                       body: Stack(
                         children: [
                           // Global video background
-                          if (_videoController != null &&
-                              _videoController!.value.isInitialized)
+                          if (showVideo)
                             SizedBox.expand(
                               child: FittedBox(
                                 fit: BoxFit.cover,
                                 child: SizedBox(
-                                  width: _videoController!.value.size.width,
-                                  height: _videoController!.value.size.height,
-                                  child: VideoPlayer(_videoController!),
+                                  width: videoController.value.size.width,
+                                  height: videoController.value.size.height,
+                                  child: VideoPlayer(videoController),
                                 ),
                               ),
+                            ),
+                          if (!showVideo)
+                            const SizedBox.expand(
+                              child: ColoredBox(color: _bgDark),
                             ),
                           // Global Dark overlay
                           Container(
@@ -1900,6 +2454,17 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                             ),
                                           ),
 
+                                          // MAINTENANCE / UPDATE REQUIRED: covers the
+                                          // customer UI; the update badge and the
+                                          // logo (admin access) stay above it.
+                                          if (_serviceBlockMessage(licenseStatus)
+                                              case final blockMessage?)
+                                            Positioned.fill(
+                                              child: _buildServiceBlockOverlay(
+                                                blockMessage,
+                                              ),
+                                            ),
+
                                           // UPDATE BADGE
                                           if (Platform.isAndroid &&
                                               licenseStatus.updateAvailable)
@@ -1940,38 +2505,34 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                         child: Image.asset(
                                                           'assets/logo.png',
                                                           fit: BoxFit.contain,
-                                                          errorBuilder:
-                                                              (
-                                                                context,
-                                                                error,
-                                                                stackTrace,
-                                                              ) {
-                                                                return Container(
-                                                                  decoration: BoxDecoration(
-                                                                    color: Colors
-                                                                        .white
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.05,
-                                                                        ),
-                                                                    shape: BoxShape
-                                                                        .circle,
-                                                                  ),
-                                                                  child: const Center(
-                                                                    child: Text(
-                                                                      'LOGO',
-                                                                      style: TextStyle(
-                                                                        color:
-                                                                            _cream,
-                                                                        fontSize:
-                                                                            24,
-                                                                        fontWeight:
-                                                                            FontWeight.bold,
-                                                                      ),
+                                                          errorBuilder: (context, error, stackTrace) {
+                                                            return Container(
+                                                              decoration: BoxDecoration(
+                                                                color: Colors
+                                                                    .white
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.05,
                                                                     ),
+                                                                shape: BoxShape
+                                                                    .circle,
+                                                              ),
+                                                              child: const Center(
+                                                                child: Text(
+                                                                  'LOGO',
+                                                                  style: TextStyle(
+                                                                    color:
+                                                                        _cream,
+                                                                    fontSize:
+                                                                        24,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
                                                                   ),
-                                                                );
-                                                              },
+                                                                ),
+                                                              ),
+                                                            );
+                                                          },
                                                         ),
                                                       ),
                                                       if (appThemeNotifier
@@ -2031,9 +2592,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                       vertical: 8,
                                                     ),
                                                 decoration: BoxDecoration(
-                                                  color: const Color(
-                                                    0xFF1C1724,
-                                                  ).withValues(alpha: 0.8),
+                                                  color: const Color(0xFF1C1724)
+                                                      .withValues(alpha: 0.8),
                                                   borderRadius:
                                                       BorderRadius.circular(20),
                                                   border: Border.all(
@@ -2395,7 +2955,19 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   }
 
   Future<void> _openAdminPin() async {
-    _idleTimer?.cancel();
+    GlobalDialogTracker.isAdminSessionOpen = true;
+    try {
+      await _runAdminSession();
+    } finally {
+      GlobalDialogTracker.isAdminSessionOpen = false;
+    }
+    if (mounted && !_isIdle) {
+      _resetIdleTimer();
+    }
+  }
+
+  Future<void> _runAdminSession() async {
+    _resetIdleTimer();
     final unlocked = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
@@ -2439,7 +3011,21 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                   });
                   _LuuqSettings.instance.baristaDrink = drink.name;
                   _LuuqSettings.instance.baristaDessert = dessert.name;
+                  _LuuqSettings.instance.baristaDrinkId = drink.id;
+                  _LuuqSettings.instance.baristaDessertId = dessert.id;
                   unawaited(_saveSettingsInBackground('barista'));
+                  // Bundled items have no id; pushing nulls would clear the
+                  // profile's server-side barista override.
+                  final drinkId = drink.id;
+                  final dessertId = dessert.id;
+                  if (drinkId != null && dessertId != null) {
+                    _reportMenuPush(
+                      MenuService.instance.pushLocalBarista(
+                        drinkId: drinkId,
+                        dessertId: dessertId,
+                      ),
+                    );
+                  }
 
                   AnalyticsService.instance.trackBaristaRecommendationUpdated(
                     drink.name,
@@ -2478,7 +3064,20 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                   _LuuqSettings.instance.wheelItems = items
                       .map((e) => e.name)
                       .toList();
+                  final itemIds = items
+                      .map((e) => e.id)
+                      .whereType<String>()
+                      .toList(growable: false);
+                  // Only persist ids when every item has one; a partial list
+                  // would shadow the name fallback on the next start.
+                  _LuuqSettings.instance.wheelItemIds =
+                      itemIds.length == items.length ? itemIds : null;
                   unawaited(_saveSettingsInBackground('wheel'));
+                  if (itemIds.length == 8) {
+                    _reportMenuPush(
+                      MenuService.instance.pushLocalWheel(itemIds),
+                    );
+                  }
 
                   AnalyticsService.instance.trackWheelContentUpdated(
                     items.length,
@@ -2622,9 +3221,26 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   }
 
   List<_MenuItem> get _recommendationDrinkOptions {
+    if (_activeMenuCategoryIcons.isNotEmpty) {
+      final excluded = <IconData>{
+        Icons.cake_rounded,
+        Icons.cookie_rounded,
+        Icons.icecream_rounded,
+        Icons.icecream_outlined,
+        Icons.add_circle_outline_rounded,
+        Icons.coffee_rounded,
+        Icons.lunch_dining_rounded,
+      };
+      return _currentMenuCategories.entries
+          .where(
+            (entry) => !excluded.contains(_activeMenuCategoryIcons[entry.key]),
+          )
+          .expand((entry) => entry.value)
+          .toList(growable: false);
+    }
     const dessertCategories = {'Pasta & Tatlı', 'LUUQ Chocolate'};
     const hiddenCategories = {'Ekstralar', 'Termos & Seramik', 'Sandviç'};
-    return _menuCategories.entries
+    return _currentMenuCategories.entries
         .where(
           (entry) =>
               !dessertCategories.contains(entry.key) &&
@@ -2635,9 +3251,24 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   }
 
   List<_MenuItem> get _recommendationDessertOptions {
+    if (_activeMenuCategoryIcons.isNotEmpty) {
+      final dessertIcons = <IconData>{
+        Icons.cake_rounded,
+        Icons.cookie_rounded,
+        Icons.icecream_rounded,
+        Icons.icecream_outlined,
+      };
+      return _currentMenuCategories.entries
+          .where(
+            (entry) =>
+                dessertIcons.contains(_activeMenuCategoryIcons[entry.key]),
+          )
+          .expand((entry) => entry.value)
+          .toList(growable: false);
+    }
     return [
-      ...?_menuCategories['Pasta & Tatlı'],
-      ...?_menuCategories['LUUQ Chocolate'],
+      ...?_currentMenuCategories['Pasta & Tatlı'],
+      ...?_currentMenuCategories['LUUQ Chocolate'],
     ];
   }
 
@@ -2661,14 +3292,21 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   List<_MenuItem> get _herbalTeaOptions =>
       _itemsForCategoryIcons([Icons.eco_rounded]);
 
-  List<_MenuItem> get _iceCreamOptions =>
-      _menuCategories['Dondurmalar'] ?? const [];
+  List<_MenuItem> get _iceCreamOptions => _activeMenuCategoryIcons.isNotEmpty
+      ? _itemsForCategoryIcons([
+          Icons.icecream_outlined,
+          Icons.icecream_rounded,
+        ])
+      : (_currentMenuCategories['Dondurmalar'] ?? const []);
 
   List<_MenuItem> _itemsForCategoryIcons(List<IconData> icons) {
     final items = <_MenuItem>[];
-    for (final entry in _categoryIcons.entries) {
+    final iconMap = _activeMenuCategoryIcons.isNotEmpty
+        ? _activeMenuCategoryIcons
+        : _categoryIcons;
+    for (final entry in iconMap.entries) {
       if (icons.contains(entry.value)) {
-        items.addAll(_menuCategories[entry.key] ?? const []);
+        items.addAll(_currentMenuCategories[entry.key] ?? const []);
       }
     }
     return items;
@@ -2903,8 +3541,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                       child: _buildRecommendationBox(
                         icon: Icons.local_cafe_rounded,
                         label: tr('İçecek', 'Drink'),
-                        value: trMenu(drink.name),
+                        value: _menuItemName(drink),
                         imagePath: drink.imagePath,
+                        remoteImageUrl: drink.remoteImageUrl,
                         onTap: () => _showProductDetailDialog(drink),
                       ),
                     ),
@@ -2913,8 +3552,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                       child: _buildRecommendationBox(
                         icon: Icons.cake_rounded,
                         label: tr('Tatlı', 'Dessert'),
-                        value: trMenu(dessert.name),
+                        value: _menuItemName(dessert),
                         imagePath: dessert.imagePath,
+                        remoteImageUrl: dessert.remoteImageUrl,
                         onTap: () => _showProductDetailDialog(dessert),
                       ),
                     ),
@@ -2933,6 +3573,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     required String label,
     required String value,
     required String? imagePath,
+    required String? remoteImageUrl,
     required VoidCallback onTap,
   }) {
     final isCompact = MediaQuery.sizeOf(context).width < 700;
@@ -2962,21 +3603,12 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                 borderRadius: BorderRadius.circular(12),
               ),
               clipBehavior: Clip.antiAlias,
-              child: imagePath == null
-                  ? Icon(icon, color: _cream, size: isCompact ? 32 : 38)
-                  : Image.asset(
-                      imagePath,
-                      // Kutu en fazla 88px; grid önbelleğiyle aynı anahtar.
-                      cacheWidth: 176,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          icon,
-                          color: _cream,
-                          size: isCompact ? 32 : 38,
-                        );
-                      },
-                    ),
+              child: _buildMenuImage(
+                fallbackIcon: icon,
+                assetPath: imagePath,
+                remoteImageUrl: remoteImageUrl,
+                cacheWidth: 176,
+              ),
             ),
             SizedBox(height: isCompact ? 14 : 16),
             Text(
@@ -3222,26 +3854,28 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                 ],
                                               ),
                                               clipBehavior: Clip.antiAlias,
-                                              child: drink.imagePath == null
-                                                  ? Icon(
-                                                      drink.icon,
-                                                      color: Colors.white70,
-                                                      size: 32,
-                                                    )
-                                                  : Image.asset(
-                                                      _wheelImagePath(
-                                                        drink.imagePath!,
-                                                      ),
-                                                      cacheWidth: 136,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder: (c, e, s) =>
-                                                          Icon(
-                                                            drink.icon,
-                                                            color:
-                                                                Colors.white70,
-                                                            size: 32,
-                                                          ),
-                                                    ),
+                                              child: _buildMenuImage(
+                                                fallbackIcon: drink.icon,
+                                                assetPath: drink.imagePath,
+                                                remoteImageUrl:
+                                                    drink.remoteImageUrl,
+                                                transparentAssetPath:
+                                                    drink
+                                                        .transparentImagePath ??
+                                                    (drink.imagePath
+                                                                ?.startsWith(
+                                                                  'assets/',
+                                                                ) ==
+                                                            true
+                                                        ? _wheelImagePath(
+                                                            drink.imagePath!,
+                                                          )
+                                                        : null),
+                                                transparentRemoteImageUrl: drink
+                                                    .remoteTransparentImageUrl,
+                                                preferTransparent: true,
+                                                cacheWidth: 136,
+                                              ),
                                             ),
                                             const SizedBox(height: 8),
                                             // Tangential (MERKEZE DİK) Text
@@ -3524,11 +4158,14 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   Widget _buildResultArea(Drink drink) {
     final isCompact = MediaQuery.sizeOf(context).width < 700;
     final menuItem = _menuItemForDrink(drink);
-    final resultName = trMenu(menuItem?.name ?? drink.fullName);
-    final resultDescription = trMenu(
-      (menuItem?.desc.isNotEmpty ?? false) ? menuItem!.desc : drink.description,
-    );
+    final resultName = menuItem == null
+        ? drink.fullName
+        : _menuItemName(menuItem);
+    final resultDescription = menuItem == null
+        ? drink.description
+        : _menuItemDescription(menuItem);
     final resultImagePath = menuItem?.imagePath;
+    final resultImageUrl = menuItem?.remoteImageUrl ?? drink.remoteImageUrl;
 
     return TweenAnimationBuilder<double>(
       key: ValueKey('result_${drink.shortName}'),
@@ -3615,6 +4252,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                     child: _buildResultVisual(
                       drink: drink,
                       imagePath: resultImagePath,
+                      remoteImageUrl: resultImageUrl,
                       size: isCompact ? 100 : 120,
                     ),
                   ),
@@ -3716,69 +4354,66 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
   Widget _buildRightTopBlankCard(bool isSpinning) {
     final theme = appThemeNotifier.value;
+    _MenuItem showcaseItem(_MenuItem item) {
+      return _MenuItem(
+        item.name,
+        item.price,
+        item.icon,
+        desc: item.desc,
+        tags: item.tags,
+        imagePath: item.imagePath,
+        id: item.id,
+        nameEn: item.nameEn,
+        descEn: item.descEn,
+        tagsEn: item.tagsEn,
+        remoteImageUrl: item.remoteImageUrl,
+        transparentImagePath:
+            item.transparentImagePath ??
+            (item.imagePath?.startsWith('assets/') == true
+                ? _wheelImagePath(item.imagePath!)
+                : null),
+        remoteTransparentImageUrl: item.remoteTransparentImageUrl,
+      );
+    }
+
+    List<_MenuItem> withImages(Iterable<_MenuItem> items) => items
+        .where(
+          (item) =>
+              item.imagePath != null ||
+              item.remoteImageUrl != null ||
+              item.transparentImagePath != null ||
+              item.remoteTransparentImageUrl != null,
+        )
+        .map(showcaseItem)
+        .toList();
 
     if (theme == AppTheme.winter) {
-      final List<_MenuItem> hotDrinks = [];
-      final espresso = _menuCategories['Espresso Kahveler'] ?? [];
-      final hot = _menuCategories['Sıcak İçecekler'] ?? [];
-
-      for (final item in [...espresso, ...hot]) {
-        if (item.imagePath != null) {
-          final pngPath = _wheelImagePath(item.imagePath!);
-
-          hotDrinks.add(
-            _MenuItem(
-              item.name,
-              item.price,
-              item.icon,
-              desc: item.desc,
-              tags: item.tags,
-              imagePath: pngPath,
-            ),
-          );
-        }
-      }
-
       return _CocktailShowcaseCard(
-        cocktails: hotDrinks,
+        cocktails: withImages(
+          _itemsForCategoryIcons([
+            Icons.local_cafe_rounded,
+            Icons.coffee_maker_rounded,
+            Icons.whatshot_rounded,
+          ]),
+        ),
         onTap: _showProductDetailDialog,
         isSpinning: isSpinning,
       );
     } else if (theme == AppTheme.normal) {
-      final List<_MenuItem> allDrinks = [];
-      const drinkCategoryNames = [
-        'Espresso Kahveler',
-        'Filtre Kahveler',
-        'Sıcak İçecekler',
-        'Ice Kahveler',
-        'LUUQ Kokteyl',
-        'Bitki Çayları',
-        'Frozen',
-        'Bubble Tea',
-        'Milkshake',
-        'Meşrubatlar',
-      ];
-
-      for (final catName in drinkCategoryNames) {
-        final items = _menuCategories[catName] ?? [];
-        for (final item in items) {
-          if (item.imagePath != null) {
-            final pngPath = _wheelImagePath(item.imagePath!);
-
-            allDrinks.add(
-              _MenuItem(
-                item.name,
-                item.price,
-                item.icon,
-                desc: item.desc,
-                tags: item.tags,
-                imagePath: pngPath,
-              ),
-            );
-          }
-        }
-      }
-
+      final allDrinks = withImages(
+        _itemsForCategoryIcons([
+          Icons.local_cafe_rounded,
+          Icons.coffee_maker_rounded,
+          Icons.whatshot_rounded,
+          Icons.ac_unit_rounded,
+          Icons.local_bar_rounded,
+          Icons.eco_rounded,
+          Icons.severe_cold_rounded,
+          Icons.bubble_chart_rounded,
+          Icons.icecream_rounded,
+          Icons.sports_bar_rounded,
+        ]),
+      );
       // Shuffle with a stable seed so it rotates consistently without jumping
       allDrinks.shuffle(Random(42));
 
@@ -3788,52 +4423,18 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         isSpinning: isSpinning,
       );
     } else if (theme == AppTheme.feast) {
-      final List<_MenuItem> desserts = [];
-      final pasta = _menuCategories['Pasta & Tatlı'] ?? [];
-      final choco = _menuCategories['LUUQ Chocolate'] ?? [];
-
-      for (final item in [...pasta, ...choco]) {
-        if (item.imagePath != null) {
-          final pngPath = _wheelImagePath(item.imagePath!);
-
-          desserts.add(
-            _MenuItem(
-              item.name,
-              item.price,
-              item.icon,
-              desc: item.desc,
-              tags: item.tags,
-              imagePath: pngPath,
-            ),
-          );
-        }
-      }
-
       return _CocktailShowcaseCard(
-        cocktails: desserts,
+        cocktails: withImages(
+          _itemsForCategoryIcons([Icons.cake_rounded, Icons.cookie_rounded]),
+        ),
         onTap: _showProductDetailDialog,
         isSpinning: isSpinning,
       );
     } else {
-      final List<_MenuItem> cocktails = [];
-      final list = _menuCategories['LUUQ Kokteyl'] ?? [];
-      for (final item in list) {
-        if (item.imagePath != null) {
-          final pngPath = _wheelImagePath(item.imagePath!);
-          cocktails.add(
-            _MenuItem(
-              item.name,
-              item.price,
-              item.icon,
-              desc: item.desc,
-              tags: item.tags,
-              imagePath: pngPath,
-            ),
-          );
-        }
-      }
       return _CocktailShowcaseCard(
-        cocktails: cocktails,
+        cocktails: withImages(
+          _itemsForCategoryIcons([Icons.local_bar_rounded]),
+        ),
         onTap: _showProductDetailDialog,
         isSpinning: isSpinning,
       );
@@ -3843,11 +4444,16 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   Widget _buildResultVisual({
     required Drink drink,
     required String? imagePath,
+    required String? remoteImageUrl,
     required double size,
   }) {
     final iconSize = size * 0.58;
 
-    if (imagePath == null) {
+    if ((imagePath == null &&
+            (remoteImageUrl == null || remoteImageUrl.isEmpty)) &&
+        drink.transparentImagePath == null &&
+        (drink.remoteTransparentImageUrl == null ||
+            drink.remoteTransparentImageUrl!.isEmpty)) {
       return Icon(drink.icon, size: iconSize, color: _gold);
     }
 
@@ -3867,17 +4473,15 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Image.asset(
-        imagePath,
+      child: _buildMenuImage(
+        fallbackIcon: drink.icon,
+        assetPath: imagePath,
+        remoteImageUrl: remoteImageUrl,
+        transparentAssetPath: drink.transparentImagePath,
+        transparentRemoteImageUrl: drink.remoteTransparentImageUrl,
+        preferTransparent: true,
         cacheWidth: 240,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: _bgDark,
-            alignment: Alignment.center,
-            child: Icon(drink.icon, size: iconSize * 0.85, color: _gold),
-          );
-        },
       ),
     );
   }
@@ -3887,17 +4491,21 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         _preferredMenuNames[drink.fullName] ??
         _preferredMenuNames[drink.shortName] ??
         [drink.fullName, drink.shortName];
-    final allItems = _menuCategories.values.expand((items) => items).toList();
+    final allItems = _currentMenuCategories.values
+        .expand((items) => items)
+        .toList();
     _MenuItem? fallbackMatch;
 
     for (final preferredName in preferredNames) {
       final match = _firstMenuMatch(
         allItems,
         (item) =>
-            _normalizeMenuName(trMenu(item.name)) ==
+            _normalizeMenuName(_menuItemName(item)) ==
             _normalizeMenuName(preferredName),
       );
-      if (match?.imagePath != null) return match;
+      if (match?.imagePath != null || match?.remoteImageUrl != null) {
+        return match;
+      }
       fallbackMatch ??= match;
     }
     if (fallbackMatch != null) return fallbackMatch;
@@ -3906,9 +4514,11 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       final normalized = _normalizeMenuName(preferredName);
       final match = _firstMenuMatch(
         allItems,
-        (item) => _normalizeMenuName(trMenu(item.name)).contains(normalized),
+        (item) => _normalizeMenuName(_menuItemName(item)).contains(normalized),
       );
-      if (match?.imagePath != null) return match;
+      if (match?.imagePath != null || match?.remoteImageUrl != null) {
+        return match;
+      }
       fallbackMatch ??= match;
     }
     if (fallbackMatch != null) return fallbackMatch;
@@ -3916,7 +4526,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     final fullName = _normalizeMenuName(drink.fullName);
     return _firstMenuMatch(
       allItems,
-      (item) => fullName.contains(_normalizeMenuName(trMenu(item.name))),
+      (item) => fullName.contains(_normalizeMenuName(_menuItemName(item))),
     );
   }
 
@@ -4467,6 +5077,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
   int? _editingPlayerIndex;
 
   bool _isAnimating = false;
+  bool _physicsStalled = false;
 
   @override
   void initState() {
@@ -4491,6 +5102,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
     // düşen topu belirler; sonuç onComplete ile simülasyondan gelir.
     setState(() {
       _result = null; // Hide previous result
+      _physicsStalled = false;
       _isAnimating = true;
       _editingPlayerIndex = null;
     });
@@ -4573,7 +5185,10 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
       child: Container(
         key: const ValueKey('who_pays_card'),
         width: 480,
-        padding: const EdgeInsets.all(40),
+        padding: EdgeInsets.symmetric(
+          horizontal: 40,
+          vertical: MediaQuery.textScalerOf(context).scale(28) > 28 ? 16 : 40,
+        ),
         decoration: BoxDecoration(
           color: _surface,
           borderRadius: BorderRadius.circular(40),
@@ -4635,6 +5250,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                             setState(() {
                               _personCount = count;
                               _result = null;
+                              _physicsStalled = false;
                               _editingPlayerIndex = null;
                               _initColors();
                             });
@@ -4692,6 +5308,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                             setState(() {
                               _editingPlayerIndex = isEditing ? null : index;
                               _result = null;
+                              _physicsStalled = false;
                             });
                           },
                     child: Container(
@@ -4808,10 +5425,20 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
               playerColors: _playerColors,
               isAnimating: _isAnimating,
               showResult: _result != null,
+              showFailure: _physicsStalled,
               onComplete: (winner) {
                 if (!mounted) return;
                 setState(() {
                   _result = winner + 1;
+                  _physicsStalled = false;
+                  _isAnimating = false;
+                });
+              },
+              onStalled: () {
+                if (!mounted) return;
+                setState(() {
+                  _result = null;
+                  _physicsStalled = true;
                   _isAnimating = false;
                 });
               },
@@ -4824,13 +5451,19 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
             // boyunda kalır ki kart, durumlar arasında büyüyüp görsel kayma
             // yaratmasın.
             SizedBox(
-              height: 142,
+              height: MediaQuery.textScalerOf(context).scale(28) > 28
+                  ? 142 + MediaQuery.textScalerOf(context).scale(48)
+                  : 142,
               child: Center(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
-                  child: (_result != null && !_isAnimating)
+                  child: ((_result != null || _physicsStalled) && !_isAnimating)
                       ? Align(
-                          key: ValueKey(_result),
+                          key: ValueKey(
+                            _physicsStalled
+                                ? 'who_pays_physics_stalled'
+                                : 'who_pays_result_$_result',
+                          ),
                           alignment: Alignment.bottomCenter,
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -4857,18 +5490,31 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                                     ),
                                   ],
                                 ),
-                                child: Text(
-                                  tr(
-                                    'Hesap $_result. kişide! 🎉',
-                                    'Person $_result pays the bill! 🎉',
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w900,
-                                    color: _playerColors[_result! - 1],
-                                  ),
-                                ),
+                                child: _physicsStalled
+                                    ? Text(
+                                        tr(
+                                          'Top deliğe ulaşamadı. Lütfen tekrar deneyin.',
+                                          'The balls did not reach the opening. Please try again.',
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w800,
+                                          color: _gold,
+                                        ),
+                                      )
+                                    : Text(
+                                        tr(
+                                          'Hesap $_result. kişide! 🎉',
+                                          'Person $_result pays the bill! 🎉',
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w900,
+                                          color: _playerColors[_result! - 1],
+                                        ),
+                                      ),
                               ),
                               const SizedBox(height: 8),
                               _buildHesapKimdeActionButton(
@@ -4960,16 +5606,20 @@ class _LotteryMachine extends StatefulWidget {
   final List<Color> playerColors;
   final bool isAnimating;
   final bool showResult;
+  final bool showFailure;
 
   /// Çekiliş bittiğinde fiziğin ağızdan düşürdüğü topun endeksiyle çağrılır.
   final ValueChanged<int> onComplete;
+  final VoidCallback onStalled;
 
   const _LotteryMachine({
     required this.personCount,
     required this.playerColors,
     required this.isAnimating,
     required this.showResult,
+    required this.showFailure,
     required this.onComplete,
+    required this.onStalled,
   });
 
   @override
@@ -4977,82 +5627,88 @@ class _LotteryMachine extends StatefulWidget {
 }
 
 class _LotteryMachineState extends State<_LotteryMachine>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  late final Ticker _ticker;
+  final ValueNotifier<int> _controller = ValueNotifier<int>(0);
   late WhoPaysLotterySimulation _simulation;
-
   final _spinSound = _SpinTickSound();
   final _seedRandom = Random();
   DateTime? _lastImpactSoundAt;
+  Duration? _lastElapsed;
+  double _drawElapsed = 0;
   bool _reduceMotion = false;
+  bool _completed = false;
+  bool _running = false;
+  bool _foreground = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _simulation = _createSimulation(seed: widget.personCount * 997);
-    _controller = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: _simulation.durationMilliseconds),
-    );
-    _controller.addListener(_handleAnimationTick);
-    _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
-        _spinSound.playResult();
-        // Reduced-motion akışında son advanceReducedMotion(1) çağrısı bu
-        // callback'ten önce gelir, dolayısıyla her iki yolda da kazanan
-        // burada çözülmüş durumdadır (seated fazında null yapısal olarak
-        // imkânsız; ?? 0 yalnız savunmadır).
-        final captured = _simulation.capturedBallIndex;
-        assert(captured != null, 'seated draw must have a captured ball');
-        widget.onComplete(captured ?? 0);
-      }
-    });
+    _ticker = createTicker(_handleTick);
   }
 
-  WhoPaysLotterySimulation _createSimulation({required int seed}) {
-    return WhoPaysLotterySimulation(
-      personCount: widget.personCount,
-      seed: seed,
+  WhoPaysLotterySimulation _createSimulation({required int seed}) =>
+      WhoPaysLotterySimulation(personCount: widget.personCount, seed: seed);
+
+  void _handleTick(Duration elapsed) {
+    final previous = _lastElapsed;
+    _lastElapsed = elapsed;
+    if (!_running || !_foreground || previous == null) return;
+    // Discard suspended wall time; never fast-forward the draw on resume.
+    final dt = min(
+      (elapsed - previous).inMicroseconds / 1000000,
+      WhoPaysLotterySimulation.fixedStepSeconds *
+          WhoPaysLotterySimulation.maxStepsPerFrame,
     );
-  }
-
-  void _syncControllerDuration() {
-    _controller.duration = Duration(
-      milliseconds: _reduceMotion ? 180 : _simulation.durationMilliseconds,
-    );
-  }
-
-  void _handleAnimationTick() {
-    if (!mounted || !widget.isAnimating) return;
-
+    _drawElapsed += dt;
     if (_reduceMotion) {
-      _simulation.advanceReducedMotion(_controller.value);
-      return;
+      _simulation.advanceReducedMotion((_drawElapsed / 0.18).clamp(0.0, 1.0));
+    } else {
+      final report = _simulation.advanceTo(_drawElapsed);
+      if (!_completed && report.maxImpactSpeed >= 90) {
+        final now = DateTime.now();
+        if (_lastImpactSoundAt == null ||
+            now.difference(_lastImpactSoundAt!) >=
+                const Duration(milliseconds: 60)) {
+          _lastImpactSoundAt = now;
+          _spinSound.playTick();
+        }
+      }
     }
-
-    final report = _simulation.advanceTo(
-      _controller.value * _simulation.durationSeconds,
-    );
-    if (report.maxImpactSpeed < 90) return;
-
-    final now = DateTime.now();
-    final lastImpactSoundAt = _lastImpactSoundAt;
-    if (lastImpactSoundAt != null &&
-        now.difference(lastImpactSoundAt) < const Duration(milliseconds: 60)) {
-      return;
+    _controller.value++;
+    if (!_completed && _simulation.isPhysicallySeated) {
+      _completed = true;
+      _spinSound.playResult();
+      final captured = _simulation.capturedBallIndex;
+      assert(captured != null);
+      if (captured != null) widget.onComplete(captured);
+    } else if (!_completed && _simulation.isStalled) {
+      _completed = true;
+      widget.onStalled();
     }
-    _lastImpactSoundAt = now;
-    _spinSound.playTick();
+    if (_completed && (_reduceMotion || _simulation.isSleeping)) _ticker.stop();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _lastElapsed = null;
+    if (!_foreground) {
+      _ticker.stop();
+    } else if (_running &&
+        !(_completed && (_reduceMotion || _simulation.isSleeping)) &&
+        !_ticker.isActive) {
+      _ticker.start();
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    if (_reduceMotion == reduceMotion) return;
-
-    _reduceMotion = reduceMotion;
-    _syncControllerDuration();
+    // Apply accessibility changes between draws, never swap physics mid-flight.
+    if (!_running) _reduceMotion = MediaQuery.disableAnimationsOf(context);
   }
 
   @override
@@ -5070,35 +5726,46 @@ class _LotteryMachineState extends State<_LotteryMachine>
             ? previous.exportState()
             : null,
       );
-      _syncControllerDuration();
-      _controller.forward(from: 0);
-    } else if (!widget.showResult && oldWidget.showResult) {
-      _controller.reset();
+      _reduceMotion = MediaQuery.disableAnimationsOf(context);
+      _drawElapsed = 0;
+      _lastElapsed = null;
+      _completed = false;
+      _running = true;
+      if (_foreground && !_ticker.isActive) _ticker.start();
+    } else if ((!widget.showResult &&
+            !widget.showFailure &&
+            (oldWidget.showResult || oldWidget.showFailure)) ||
+        widget.personCount != oldWidget.personCount) {
+      _ticker.stop();
+      _running = false;
+      _lastElapsed = null;
       _simulation = _createSimulation(seed: widget.personCount * 997);
-      _syncControllerDuration();
-    } else if (widget.personCount != oldWidget.personCount) {
-      _controller.reset();
-      _simulation = _createSimulation(seed: widget.personCount * 997);
-      _syncControllerDuration();
+      _controller.value++;
     }
   }
 
   @override
   void dispose() {
-    _controller
-      ..removeListener(_handleAnimationTick)
-      ..dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _ticker.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final seatedWinner = _simulation.phase == WhoPaysLotteryPhase.seated
+    final seatedWinner = _simulation.isPhysicallySeated
         ? _simulation.capturedBallIndex
         : null;
     return Semantics(
-      liveRegion: widget.showResult && seatedWinner != null,
-      label: widget.showResult && seatedWinner != null
+      liveRegion:
+          (widget.showResult && seatedWinner != null) || widget.showFailure,
+      label: widget.showFailure
+          ? tr(
+              'Toplar deliğe ulaşamadı. Tekrar deneyin.',
+              'The balls did not reach the opening. Try again.',
+            )
+          : widget.showResult && seatedWinner != null
           ? tr(
               'Kazanan top çıkışta: ${seatedWinner + 1}. kişi',
               'Winning ball in chute: person ${seatedWinner + 1}',
@@ -5131,13 +5798,134 @@ class _MenuItem {
     this.desc = '',
     this.tags = const [],
     this.imagePath,
+    this.id,
+    this.nameEn,
+    this.descEn,
+    this.tagsEn = const [],
+    this.remoteImageUrl,
+    this.transparentImagePath,
+    this.remoteTransparentImageUrl,
+    this.categoryId,
   });
+  final String? id;
+  final String? categoryId;
   final String name;
+  final String? nameEn;
   final String price;
   final IconData icon;
   final String desc;
+  final String? descEn;
   final List<String> tags;
+  final List<String> tagsEn;
   final String? imagePath;
+  final String? remoteImageUrl;
+  final String? transparentImagePath;
+  final String? remoteTransparentImageUrl;
+}
+
+Widget _buildMenuImage({
+  required IconData fallbackIcon,
+  String? assetPath,
+  String? remoteImageUrl,
+  String? transparentAssetPath,
+  String? transparentRemoteImageUrl,
+  bool preferTransparent = false,
+  int? cacheWidth,
+  BoxFit fit = BoxFit.cover,
+  Color? fallbackColor,
+}) => MenuImageView(
+  fallbackIcon: fallbackIcon,
+  fallbackColor: fallbackColor ?? _cream,
+  assetPath: assetPath,
+  remoteImageUrl: remoteImageUrl,
+  transparentAssetPath: transparentAssetPath,
+  transparentRemoteImageUrl: transparentRemoteImageUrl,
+  preferTransparent: preferTransparent,
+  cacheWidth: cacheWidth,
+  fit: fit,
+);
+
+Map<String, List<_MenuItem>> _activeMenuCategories =
+    <String, List<_MenuItem>>{};
+final Map<String, String> _activeMenuCategoryNamesById = <String, String>{};
+
+Map<String, List<_MenuItem>> get _currentMenuCategories =>
+    _activeMenuCategories.isEmpty ? _menuCategories : _activeMenuCategories;
+
+IconData _menuIconForKey(
+  String key, {
+  IconData fallback = Icons.local_cafe_rounded,
+}) {
+  const icons = <String, IconData>{
+    'local_cafe_rounded': Icons.local_cafe_rounded,
+    'coffee_maker_rounded': Icons.coffee_maker_rounded,
+    'whatshot_rounded': Icons.whatshot_rounded,
+    'ac_unit_rounded': Icons.ac_unit_rounded,
+    'local_bar_rounded': Icons.local_bar_rounded,
+    'eco_rounded': Icons.eco_rounded,
+    'severe_cold_rounded': Icons.severe_cold_rounded,
+    'bubble_chart_rounded': Icons.bubble_chart_rounded,
+    'icecream_rounded': Icons.icecream_rounded,
+    'icecream_outlined': Icons.icecream_outlined,
+    'sports_bar_rounded': Icons.sports_bar_rounded,
+    'cake_rounded': Icons.cake_rounded,
+    'cookie_rounded': Icons.cookie_rounded,
+    'lunch_dining_rounded': Icons.lunch_dining_rounded,
+    'coffee_rounded': Icons.coffee_rounded,
+    'add_circle_outline_rounded': Icons.add_circle_outline_rounded,
+    'emoji_food_beverage_rounded': Icons.emoji_food_beverage_rounded,
+  };
+  return icons[key] ?? fallback;
+}
+
+void _applyRemoteMenuCatalog(MenuCatalog catalog) {
+  final categories = <String, List<_MenuItem>>{};
+  _activeMenuCategoryIcons.clear();
+  _activeMenuCategoryDescriptions.clear();
+  _activeMenuCategoryDescriptionsEn.clear();
+  _activeMenuCategoryNamesEn.clear();
+  _activeMenuCategoryNamesById.clear();
+  for (final category in catalog.categories) {
+    // Keep the display label for the existing UI, but never let duplicate
+    // labels collapse two server-owned category IDs into one map entry.
+    var categoryKey = category.nameTr;
+    if (categories.containsKey(categoryKey)) {
+      final suffix = category.id.length >= 8
+          ? category.id.substring(0, 8)
+          : category.id;
+      categoryKey = '${category.nameTr} · $suffix';
+    }
+    _activeMenuCategoryNamesById[category.id] = categoryKey;
+    _activeMenuCategoryDescriptions[categoryKey] = category.descriptionTr;
+    _activeMenuCategoryNamesEn[categoryKey] = category.nameEn;
+    _activeMenuCategoryDescriptionsEn[categoryKey] = category.descriptionEn;
+    _activeMenuCategoryIcons[categoryKey] = _menuIconForKey(category.iconKey);
+    final items = <_MenuItem>[];
+    for (final remote in category.items) {
+      items.add(
+        _MenuItem(
+          remote.nameTr,
+          remote.priceText,
+          _menuIconForKey(remote.iconKey),
+          id: remote.id,
+          categoryId: category.id,
+          nameEn: remote.nameEn,
+          desc: remote.descriptionTr,
+          descEn: remote.descriptionEn,
+          tags: remote.tags,
+          tagsEn: remote.tagsEn,
+          // Cached file first; otherwise the APK-bundled photo, so an offline
+          // kiosk whose signed image URL expired still shows a picture.
+          imagePath: remote.localImagePath ?? remote.imageAsset,
+          remoteImageUrl: remote.imageUrl,
+          transparentImagePath: remote.localTransparentImagePath,
+          remoteTransparentImageUrl: remote.transparentImageUrl,
+        ),
+      );
+    }
+    categories[categoryKey] = items;
+  }
+  if (categories.isNotEmpty) _activeMenuCategories = categories;
 }
 
 // Category icons
@@ -6577,6 +7365,10 @@ class _MenuDialogState extends State<_MenuDialog> {
   @override
   void initState() {
     super.initState();
+    if (!_currentMenuCategories.containsKey(_selectedCategory) &&
+        _currentMenuCategories.isNotEmpty) {
+      _selectedCategory = _currentMenuCategories.keys.first;
+    }
     AnalyticsService.instance.trackMenuOpen();
   }
 
@@ -6589,15 +7381,15 @@ class _MenuDialogState extends State<_MenuDialog> {
   }
 
   List<_MenuItem> get _filteredItems {
-    final items = _menuCategories[_selectedCategory] ?? [];
+    final items = _currentMenuCategories[_selectedCategory] ?? [];
     if (_searchQuery.isEmpty) return items;
     final q = _searchQuery.toLowerCase();
     // Search across ALL categories
     final allItems = <_MenuItem>[];
-    for (final entry in _menuCategories.entries) {
+    for (final entry in _currentMenuCategories.entries) {
       for (final item in entry.value) {
-        if (trMenu(item.name).toLowerCase().contains(q) ||
-            trMenu(item.desc).toLowerCase().contains(q)) {
+        if (_menuItemName(item).toLowerCase().contains(q) ||
+            _menuItemDescription(item).toLowerCase().contains(q)) {
           allItems.add(item);
         }
       }
@@ -6744,9 +7536,8 @@ class _MenuDialogState extends State<_MenuDialog> {
                     fontWeight: FontWeight.w900,
                     letterSpacing: 6,
                     foreground: Paint()
-                      ..shader = const LinearGradient(
-                        colors: [_cream, _gold],
-                      ).createShader(const Rect.fromLTWH(0, 0, 250, 40)),
+                      ..shader = const LinearGradient(colors: [_cream, _gold])
+                          .createShader(const Rect.fromLTWH(0, 0, 250, 40)),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -6790,7 +7581,7 @@ class _MenuDialogState extends State<_MenuDialog> {
 
   // ═══ CATEGORY SIDEBAR ═══
   Widget _buildCategorySidebar() {
-    final categories = _menuCategories.keys.toList();
+    final categories = _currentMenuCategories.keys.toList();
     return Container(
       width: 280,
       decoration: BoxDecoration(
@@ -6816,8 +7607,12 @@ class _MenuDialogState extends State<_MenuDialog> {
               final category = categories[index];
               final isSelected =
                   category == _selectedCategory && _searchQuery.isEmpty;
-              final icon = _categoryIcons[category] ?? Icons.circle;
-              final itemCount = _menuCategories[category]?.length ?? 0;
+              final icon =
+                  (_activeMenuCategoryIcons.isNotEmpty
+                      ? _activeMenuCategoryIcons[category]
+                      : _categoryIcons[category]) ??
+                  Icons.circle;
+              final itemCount = _currentMenuCategories[category]?.length ?? 0;
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8.0),
@@ -6889,7 +7684,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                trMenu(category),
+                                _menuCategoryName(category),
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: isSelected
@@ -7064,17 +7859,23 @@ class _MenuDialogState extends State<_MenuDialog> {
 
   // ═══ CATEGORY HERO ═══
   Widget _buildCategoryHero(List<_MenuItem> items) {
-    final description = trMenu(
-      _categoryDescriptions[_selectedCategory] ??
-          tr(
-            'Bu kategoride ${items.length} ürün bulunuyor.',
-            'There are ${items.length} products in this category.',
-          ),
-    );
+    final remoteDescription = _menuCategoryDescription(_selectedCategory);
+    final configuredDescription = remoteDescription.isNotEmpty
+        ? remoteDescription
+        : _categoryDescriptions[_selectedCategory];
+    final description = remoteDescription.isNotEmpty
+        ? remoteDescription
+        : trMenu(
+            configuredDescription ??
+                tr(
+                  'Bu kategoride ${items.length} ürün bulunuyor.',
+                  'There are ${items.length} products in this category.',
+                ),
+          );
     final populars = items
         .where((i) => i.tags.contains('Popüler'))
         .take(3)
-        .map((i) => i.name)
+        .map(_menuItemName)
         .join(', ');
 
     return Container(
@@ -7096,7 +7897,10 @@ class _MenuDialogState extends State<_MenuDialog> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  _categoryIcons[_selectedCategory] ?? Icons.circle,
+                  (_activeMenuCategoryIcons.isNotEmpty
+                          ? _activeMenuCategoryIcons[_selectedCategory]
+                          : _categoryIcons[_selectedCategory]) ??
+                      Icons.circle,
                   color: _gold,
                   size: 20,
                 ),
@@ -7104,7 +7908,7 @@ class _MenuDialogState extends State<_MenuDialog> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  trMenu(_selectedCategory).toUpperCase(),
+                  _menuCategoryName(_selectedCategory).toUpperCase(),
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
@@ -7287,29 +8091,20 @@ class _MenuDialogState extends State<_MenuDialog> {
             Container(
               width: 88,
               height: 88,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: const Color(0xFF16131D).withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                image: item.imagePath != null
-                    ? DecorationImage(
-                        image: ResizeImage(
-                          AssetImage(item.imagePath!),
-                          width: 176, // Essential for fast scrolling
-                        ),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
               ),
-              child: item.imagePath == null
-                  ? Center(
-                      child: Icon(
-                        item.icon,
-                        color: _gold.withValues(alpha: 0.75),
-                        size: 38,
-                      ),
-                    )
-                  : null,
+              child: _buildMenuImage(
+                fallbackIcon: item.icon,
+                fallbackColor: _gold.withValues(alpha: 0.75),
+                assetPath: item.imagePath,
+                remoteImageUrl: item.remoteImageUrl,
+                cacheWidth: 176,
+                fit: BoxFit.cover,
+              ),
             ),
             const SizedBox(width: 16),
             // ─── INFO AREA ───
@@ -7325,7 +8120,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                     runSpacing: 4,
                     children: [
                       Text(
-                        trMenu(item.name),
+                        _menuItemName(item),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
@@ -7379,10 +8174,10 @@ class _MenuDialogState extends State<_MenuDialog> {
                     ],
                   ),
                   // Description
-                  if (trMenu(item.desc).isNotEmpty) ...[
+                  if (_menuItemDescription(item).isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
-                      trMenu(item.desc),
+                      _menuItemDescription(item),
                       style: TextStyle(
                         fontSize: _fsCaption,
                         color: Colors.white.withValues(alpha: 0.75),
@@ -7416,7 +8211,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                                 ),
                               ),
                               child: Text(
-                                trMenu(tag),
+                                _menuItemTag(item, tag),
                                 style: TextStyle(
                                   fontSize: _fsBadge,
                                   fontWeight: FontWeight.w800,
@@ -7685,7 +8480,8 @@ class _ProductDetailDialog extends StatelessWidget {
                       ),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: displayImagePath == null
+                    child:
+                        displayImagePath == null && item.remoteImageUrl == null
                         ? Center(
                             child: Icon(
                               item.icon,
@@ -7693,24 +8489,17 @@ class _ProductDetailDialog extends StatelessWidget {
                               color: _gold.withValues(alpha: 0.7),
                             ),
                           )
-                        : Image.asset(
-                            displayImagePath,
+                        : _buildMenuImage(
+                            fallbackIcon: item.icon,
+                            assetPath: displayImagePath,
+                            remoteImageUrl: item.remoteImageUrl,
                             cacheWidth: 400,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Center(
-                                child: Icon(
-                                  item.icon,
-                                  size: 90,
-                                  color: _gold.withValues(alpha: 0.7),
-                                ),
-                              );
-                            },
                           ),
                   ),
                   const SizedBox(height: 28),
                   Text(
-                    trMenu(item.name),
+                    _menuItemName(item),
                     style: const TextStyle(
                       fontSize: 30,
                       fontWeight: FontWeight.w900,
@@ -7720,9 +8509,9 @@ class _ProductDetailDialog extends StatelessWidget {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
-                  if (trMenu(item.desc).isNotEmpty) ...[
+                  if (_menuItemDescription(item).isNotEmpty) ...[
                     Text(
-                      trMenu(item.desc),
+                      _menuItemDescription(item),
                       style: TextStyle(
                         fontSize: 16,
                         color: Colors.white.withValues(alpha: 0.75),
@@ -7753,7 +8542,7 @@ class _ProductDetailDialog extends StatelessWidget {
                             ),
                           ),
                           child: Text(
-                            trMenu(tag),
+                            _menuItemTag(item, tag),
                             style: TextStyle(
                               fontSize: _fsBadge,
                               fontWeight: FontWeight.w800,
@@ -8067,6 +8856,19 @@ class _AdminPinDialogState extends State<_AdminPinDialog> {
             successVal == 1 ||
             successVal == '1';
         if (success) {
+          final adminSessionToken = data['admin_session_token']?.toString();
+          if (adminSessionToken != null && adminSessionToken.isNotEmpty) {
+            await LicenseStorage.saveAdminSessionToken(adminSessionToken);
+            // A fresh admin session lets queued wheel/barista writes go out now
+            // instead of on the next 30 s poll.
+            if (MenuService.instance.hasPendingConfig('wheel') ||
+                MenuService.instance.hasPendingConfig('barista')) {
+              // force: a sync already running would otherwise be reused and
+              // the queue would wait for the next poll.
+              unawaited(MenuService.instance.syncNow(force: true));
+            }
+          }
+          if (!mounted) return;
           AnalyticsService.instance.trackAdminPinVerifySuccess();
           Navigator.of(context).pop(true);
         } else {
@@ -8118,6 +8920,12 @@ class _AdminPinDialogState extends State<_AdminPinDialog> {
         return tr(
           'Çok fazla hatalı deneme yapıldı. Lütfen biraz bekleyin.',
           'Too many failed attempts. Please wait a moment.',
+        );
+      case 'device_binding_mismatch':
+      case 'invalid_device_id':
+        return tr(
+          'Bu cihaz lisansla eşleşmiyor. Lisans ekranından anahtarı tekrar girerek cihazı yeniden kaydedin.',
+          'This device does not match the license. Re-enter the license key to register the device again.',
         );
       default:
         return tr(
@@ -8895,7 +9703,7 @@ class _WheelContentAdminDialogState extends State<_WheelContentAdminDialog> {
                 if (duplicate != null) {
                   await _showAdminError(
                     context,
-                    '${tr('Bu ürün çarkta iki kez seçilemez', 'This product cannot be selected twice on the wheel')}: ${trMenu(duplicate.name)}',
+                    '${tr('Bu ürün çarkta iki kez seçilemez', 'This product cannot be selected twice on the wheel')}: ${_menuItemName(duplicate)}',
                   );
                   return;
                 }
@@ -8903,7 +9711,7 @@ class _WheelContentAdminDialogState extends State<_WheelContentAdminDialog> {
                 if (conflict != null) {
                   await _showAdminError(
                     context,
-                    '${tr('Bu ürün Barista önerisinde seçili', 'This product is selected in Barista recommendation')}: ${trMenu(conflict.name)}',
+                    '${tr('Bu ürün Barista önerisinde seçili', 'This product is selected in Barista recommendation')}: ${_menuItemName(conflict)}',
                   );
                   return;
                 }
@@ -8989,7 +9797,7 @@ class _WheelSlotPicker extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    trMenu(item.name),
+                    _menuItemName(item),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -9193,7 +10001,7 @@ class _BaristaAdminDialogState extends State<_BaristaAdminDialog> {
                 if (conflict != null) {
                   await _showAdminError(
                     context,
-                    '${tr('Bu ürün çark içeriğinde seçili', 'This product is selected in the wheel items')}: ${trMenu(conflict.name)}',
+                    '${tr('Bu ürün çark içeriğinde seçili', 'This product is selected in the wheel items')}: ${_menuItemName(conflict)}',
                   );
                   return;
                 }
@@ -9336,8 +10144,8 @@ class _AdminSearchPickerDialogState extends State<_AdminSearchPickerDialog> {
     return widget.items
         .where(
           (item) =>
-              trMenu(item.name).toLowerCase().contains(query) ||
-              trMenu(item.desc).toLowerCase().contains(query),
+              _menuItemName(item).toLowerCase().contains(query) ||
+              _menuItemDescription(item).toLowerCase().contains(query),
         )
         .toList(growable: false);
   }
@@ -9459,7 +10267,7 @@ class _AdminSearchPickerDialogState extends State<_AdminSearchPickerDialog> {
                           ),
                           leading: _AdminPickerThumb(item: item),
                           title: Text(
-                            trMenu(item.name),
+                            _menuItemName(item),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -9467,10 +10275,10 @@ class _AdminSearchPickerDialogState extends State<_AdminSearchPickerDialog> {
                               fontWeight: FontWeight.w900,
                             ),
                           ),
-                          subtitle: trMenu(item.desc).isEmpty
+                          subtitle: _menuItemDescription(item).isEmpty
                               ? null
                               : Text(
-                                  trMenu(item.desc),
+                                  _menuItemDescription(item),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(color: _mutedText),
@@ -9543,17 +10351,16 @@ List<_MenuItem> _defaultWheelMenuItems() {
       Icons.whatshot_rounded,
     ]),
   );
-  final desserts = _expensiveItems([
-    ...?_menuCategories['Pasta & Tatlı'],
-    ...?_menuCategories['LUUQ Chocolate'],
-  ]);
+  final desserts = _expensiveItems(
+    _menuItemsForCategoryIcons([Icons.cake_rounded, Icons.cookie_rounded]),
+  );
   final cocktails = _expensiveItems(
     _menuItemsForCategoryIcons([Icons.local_bar_rounded]),
   );
   final herbalTeas = _expensiveItems(
     _menuItemsForCategoryIcons([Icons.eco_rounded]),
   );
-  final iceCreams = _menuCategories['Dondurmalar'] ?? const [];
+  final iceCreams = _menuItemsForCategoryIcons([Icons.icecream_outlined]);
 
   if (appThemeNotifier.value == AppTheme.summer) {
     return [
@@ -9575,9 +10382,12 @@ List<_MenuItem> _defaultWheelMenuItems() {
 
 List<_MenuItem> _menuItemsForCategoryIcons(List<IconData> icons) {
   final items = <_MenuItem>[];
-  for (final entry in _categoryIcons.entries) {
+  final iconMap = _activeMenuCategoryIcons.isNotEmpty
+      ? _activeMenuCategoryIcons
+      : _categoryIcons;
+  for (final entry in iconMap.entries) {
     if (icons.contains(entry.value)) {
-      items.addAll(_menuCategories[entry.key] ?? const []);
+      items.addAll(_currentMenuCategories[entry.key] ?? const []);
     }
   }
   return items;
@@ -9600,18 +10410,25 @@ int _maxMenuPrice(String price) {
 Drink _drinkFromMenuItem(_MenuItem item) {
   final category = _categoryForMenuItem(item);
   return Drink(
-    shortName: _wheelShortName(trMenu(item.name)),
-    fullName: trMenu(item.name),
-    description: trMenu(item.desc),
+    shortName: _wheelShortName(_menuItemName(item)),
+    fullName: _menuItemName(item),
+    description: _menuItemDescription(item),
     icon: item.icon,
     color: _wheelColorForMenuItem(item, category),
     moods: _wheelMoodsForMenuItem(item, category),
     imagePath: item.imagePath,
+    remoteImageUrl: item.remoteImageUrl,
+    transparentImagePath: item.transparentImagePath,
+    remoteTransparentImageUrl: item.remoteTransparentImageUrl,
   );
 }
 
 String _categoryForMenuItem(_MenuItem item) {
-  for (final entry in _menuCategories.entries) {
+  final stableCategory = item.categoryId == null
+      ? null
+      : _activeMenuCategoryNamesById[item.categoryId!];
+  if (stableCategory != null) return stableCategory;
+  for (final entry in _currentMenuCategories.entries) {
     if (entry.value.contains(item)) return entry.key;
   }
   return '';
@@ -9626,7 +10443,9 @@ String _wheelShortName(String name) {
 }
 
 Color _wheelColorForMenuItem(_MenuItem item, String category) {
-  final icon = _categoryIcons[category];
+  final icon = (_activeMenuCategoryIcons.isNotEmpty
+      ? _activeMenuCategoryIcons
+      : _categoryIcons)[category];
   if (icon == Icons.ac_unit_rounded ||
       icon == Icons.severe_cold_rounded ||
       icon == Icons.sports_bar_rounded) {
@@ -9649,7 +10468,9 @@ Color _wheelColorForMenuItem(_MenuItem item, String category) {
 }
 
 Set<DrinkMood> _wheelMoodsForMenuItem(_MenuItem item, String category) {
-  final icon = _categoryIcons[category];
+  final icon = (_activeMenuCategoryIcons.isNotEmpty
+      ? _activeMenuCategoryIcons
+      : _categoryIcons)[category];
   final moods = <DrinkMood>{};
   if (icon == Icons.ac_unit_rounded ||
       icon == Icons.local_bar_rounded ||
@@ -9673,8 +10494,8 @@ Set<DrinkMood> _wheelMoodsForMenuItem(_MenuItem item, String category) {
       icon == Icons.bubble_chart_rounded) {
     moods.add(DrinkMood.sweet);
   }
-  final lowerName = trMenu(item.name).toLowerCase();
-  final lowerDesc = trMenu(item.desc).toLowerCase();
+  final lowerName = _menuItemName(item).toLowerCase();
+  final lowerDesc = _menuItemDescription(item).toLowerCase();
   if (lowerName.contains('latte') ||
       lowerName.contains('mocha') ||
       lowerDesc.contains('süt') ||
@@ -9699,6 +10520,9 @@ class Drink {
     required this.color,
     required this.moods,
     this.imagePath,
+    this.remoteImageUrl,
+    this.transparentImagePath,
+    this.remoteTransparentImageUrl,
   });
 
   final String shortName;
@@ -9708,6 +10532,9 @@ class Drink {
   final Color color;
   final Set<DrinkMood> moods;
   final String? imagePath;
+  final String? remoteImageUrl;
+  final String? transparentImagePath;
+  final String? remoteTransparentImageUrl;
 
   @override
   bool operator ==(Object other) {
@@ -9745,6 +10572,7 @@ class BouncyButton extends StatefulWidget {
 
 class _BouncyButtonState extends State<BouncyButton>
     with SingleTickerProviderStateMixin {
+  bool _showFocusHighlight = false;
   late final AnimationController _controller;
   late final Animation<double> _scaleAnimation;
 
@@ -9774,24 +10602,71 @@ class _BouncyButtonState extends State<BouncyButton>
   Widget build(BuildContext context) {
     return Listener(
       onPointerDown: (_) {
-        if (widget.onTap != null) {
+        if (widget.onTap != null && !MediaQuery.disableAnimationsOf(context)) {
           _controller.forward();
         }
       },
       onPointerUp: (_) {
-        if (widget.onTap != null) {
+        if (widget.onTap != null && !MediaQuery.disableAnimationsOf(context)) {
           _controller.reverse();
         }
       },
       onPointerCancel: (_) {
-        if (widget.onTap != null) {
+        if (widget.onTap != null && !MediaQuery.disableAnimationsOf(context)) {
           _controller.reverse();
         }
       },
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
-        child: ScaleTransition(scale: _scaleAnimation, child: widget.child),
+        child: FocusableActionDetector(
+          enabled: widget.onTap != null,
+          mouseCursor: widget.onTap == null
+              ? SystemMouseCursors.basic
+              : SystemMouseCursors.click,
+          onShowFocusHighlight: (value) {
+            if (mounted) setState(() => _showFocusHighlight = value);
+          },
+          shortcuts: const <ShortcutActivator, Intent>{
+            SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+          },
+          actions: <Type, Action<Intent>>{
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                final onTap = widget.onTap;
+                if (onTap != null) {
+                  if (!MediaQuery.disableAnimationsOf(context)) {
+                    _controller.forward().then((_) {
+                      if (mounted) _controller.reverse();
+                    });
+                  }
+                  onTap();
+                }
+                return null;
+              },
+            ),
+          },
+          child: Semantics(
+            button: true,
+            enabled: widget.onTap != null,
+            child: ScaleTransition(
+              scale: MediaQuery.disableAnimationsOf(context)
+                  ? const AlwaysStoppedAnimation<double>(1)
+                  : _scaleAnimation,
+              child: DecoratedBox(
+                position: DecorationPosition.foreground,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: _showFocusHighlight && widget.onTap != null
+                      ? Border.all(color: _cream, width: 2)
+                      : null,
+                ),
+                child: widget.child,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -9894,6 +10769,16 @@ class _RotatingIconState extends State<_RotatingIcon>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
@@ -9926,6 +10811,7 @@ class _CocktailShowcaseCard extends StatefulWidget {
 class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
     with WidgetsBindingObserver {
   int _currentIndex = 0;
+  bool _reduceMotion = false;
   Timer? _timer;
 
   @override
@@ -9938,13 +10824,32 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
   @override
   void didUpdateWidget(covariant _CocktailShowcaseCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isSpinning != oldWidget.isSpinning) {
+    final oldNames = oldWidget.cocktails.map((item) => item.name).toList();
+    final newNames = widget.cocktails.map((item) => item.name).toList();
+    final listChanged = !listEquals(oldNames, newNames);
+    if (listChanged) {
+      final previousName = _currentIndex < oldNames.length
+          ? oldNames[_currentIndex]
+          : null;
+      final retainedIndex = previousName == null
+          ? -1
+          : newNames.indexOf(previousName);
+      _currentIndex = retainedIndex < 0 ? 0 : retainedIndex;
+    }
+    if (listChanged || widget.isSpinning != oldWidget.isSpinning) {
       if (widget.isSpinning) {
         _stopTimer();
       } else {
         _startTimer();
       }
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _startTimer();
   }
 
   @override
@@ -9966,7 +10871,9 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
   void _startTimer() {
     _stopTimer();
     final lifecycleState = WidgetsBinding.instance.lifecycleState;
-    if (widget.cocktails.isEmpty ||
+    if (_reduceMotion ||
+        widget.isSpinning ||
+        widget.cocktails.isEmpty ||
         (lifecycleState != null &&
             lifecycleState != AppLifecycleState.resumed)) {
       return;
@@ -10184,24 +11091,25 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
                                 ),
                               ),
 
-                              if (item.imagePath != null)
+                              if (item.imagePath != null ||
+                                  item.remoteImageUrl != null ||
+                                  item.transparentImagePath != null ||
+                                  item.remoteTransparentImageUrl != null)
                                 Padding(
                                   padding: const EdgeInsets.all(12.0),
-                                  child: Image.asset(
-                                    item.imagePath!,
+                                  child: _buildMenuImage(
+                                    fallbackIcon: Icons.local_bar_rounded,
+                                    assetPath: item.imagePath,
+                                    remoteImageUrl: item.remoteImageUrl,
+                                    transparentAssetPath:
+                                        item.transparentImagePath,
+                                    transparentRemoteImageUrl:
+                                        item.remoteTransparentImageUrl,
+                                    preferTransparent: true,
                                     // Vitrin 4,5 sn'de bir ürün değiştirir;
                                     // tam çözünürlük decode önbelleği şişirir.
                                     cacheWidth: 640,
                                     fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return const Center(
-                                        child: Icon(
-                                          Icons.local_bar_rounded,
-                                          color: Colors.white70,
-                                          size: 64,
-                                        ),
-                                      );
-                                    },
                                   ),
                                 )
                               else
@@ -10250,7 +11158,7 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
                                     end: Alignment.bottomRight,
                                   ).createShader(bounds),
                                   child: Text(
-                                    trMenu(item.name),
+                                    _menuItemName(item),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -10264,7 +11172,7 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
                                 const SizedBox(height: 4),
                                 // Description
                                 Text(
-                                  trMenu(item.desc),
+                                  _menuItemDescription(item),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -10342,7 +11250,7 @@ class _CocktailShowcaseCardState extends State<_CocktailShowcaseCard>
                                 ),
                               ),
                               child: Text(
-                                trMenu(tag),
+                                _menuItemTag(item, tag),
                                 style: TextStyle(
                                   fontSize: _fsBadge,
                                   fontWeight: FontWeight.w800,
@@ -10380,13 +11288,22 @@ class _VirtualCanvasDialogWrapper extends StatelessWidget {
           child: FittedBox(
             fit: BoxFit.contain,
             child: MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(size: Size(virtualWidth, 1080.0)),
+              data: MediaQuery.of(context)
+                  .copyWith(size: Size(virtualWidth, 1080.0)),
               child: SizedBox(
                 width: virtualWidth,
                 height: 1080.0,
-                child: Center(child: child),
+                child: Center(
+                  child: Listener(
+                    behavior: HitTestBehavior.translucent,
+                    onPointerDown: (_) {
+                      if (GlobalDialogTracker.isAdminSessionOpen) {
+                        _CafeKioskScreenState.resetTimer();
+                      }
+                    },
+                    child: child,
+                  ),
+                ),
               ),
             ),
           ),
@@ -11612,9 +12529,8 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
 
   Future<bool> _checkInternet() async {
     try {
-      final result = await InternetAddress.lookup(
-        'google.com',
-      ).timeout(const Duration(seconds: 2));
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 2));
       if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) {
         return true;
       }
@@ -11944,9 +12860,8 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
                                         height: 40,
                                         child: ElevatedButton.icon(
                                           onPressed: () {
-                                            Navigator.of(
-                                              context,
-                                            ).pop(); // close AppInfo dialog
+                                            Navigator.of(context)
+                                                .pop(); // close AppInfo dialog
                                             _openLicenseUpgradeDialog(context);
                                           },
                                           icon: const Icon(
@@ -12257,6 +13172,16 @@ class _FeastThemeCandyRainState extends State<_FeastThemeCandyRain>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
   void dispose() {
     _controller.removeListener(_updateParticles);
     _controller.dispose();
@@ -12516,6 +13441,16 @@ class _NewYearThemeSnowRainState extends State<_NewYearThemeSnowRain>
     }
 
     _controller.addListener(_updateParticles);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
   }
 
   @override
@@ -13420,7 +14355,12 @@ class _UpdateDialogState extends State<_UpdateDialog>
       final currentAppInfo = await PackageInfo.fromPlatform();
       final apkPackageName = apkInfo['packageName'] as String?;
       final apkVersionName = apkInfo['versionName'] as String?;
-      final apkVersionCode = apkInfo['versionCode'] as int?;
+      // Same tolerant parse as _hasExpectedApkIdentity: the platform channel
+      // may send a long (num) or a string; a cast to int? would throw.
+      final apkVersionCodeValue = apkInfo['versionCode'];
+      final apkVersionCode = apkVersionCodeValue is num
+          ? apkVersionCodeValue.toInt()
+          : int.tryParse(apkVersionCodeValue?.toString() ?? '');
 
       debugPrint('[UPDATE] downloadedApk packageName=$apkPackageName');
       debugPrint('[UPDATE] downloadedApk versionName=$apkVersionName');
@@ -14328,6 +15268,14 @@ class GlobalDialogTracker {
   static bool isUpdateReadyToInstall = false;
   static bool isUpdateOpeningInstaller = false;
   static bool isAdminPinDialogOpen = false;
+
+  /// The admin hub loop is running. The idle timer keeps running with a longer
+  /// timeout (taps inside admin dialogs reset it) so an abandoned admin
+  /// session still closes, and remote menu changes wait until it ends.
+  static bool isAdminSessionOpen = false;
+
+  static bool shouldDeferMenuChanges() =>
+      shouldPauseIdleTimer() || isAdminSessionOpen;
 
   static bool shouldPauseIdleTimer() {
     return isUpdateDialogOpen ||

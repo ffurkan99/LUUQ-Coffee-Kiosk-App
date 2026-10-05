@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
@@ -6,6 +7,7 @@ import '../main.dart'; // To access navigatorKey
 import 'license_gate.dart';
 import 'license_service.dart';
 import 'update_service.dart';
+import '../menu/menu_service.dart';
 
 class FeatureSyncService with WidgetsBindingObserver {
   static final FeatureSyncService instance = FeatureSyncService._();
@@ -16,6 +18,9 @@ class FeatureSyncService with WidgetsBindingObserver {
   bool _isObserverRegistered = false;
   bool _isRedirectingToGate = false;
   bool _isKioskMaintenanceRouteOpen = false;
+  // The revoke notice is shown by the gate itself: a dialog over the kiosk
+  // screen could be closed by its idle timer and leave a dead screen behind.
+  bool _showRevokedNoticeOnGate = false;
 
   /// Easy to adjust polling frequency for sync
   static const Duration featureSyncInterval = Duration(seconds: 30);
@@ -55,64 +60,30 @@ class FeatureSyncService with WidgetsBindingObserver {
 
     try {
       final status = await LicenseService.instance.checkStatus();
+      if (status.active) {
+        // Reuse this single lifecycle/timer lock for menu synchronization.
+        // A menu failure must never revoke or block the already valid license.
+        await MenuService.instance.syncNow(status: status);
+      }
       if (!status.active) {
         // Ağ hatası veya sunucu hatası durumunda kiosk'u kilitleme — sadece gerçek lisans sorunlarında kapat
-        if (status.reason == 'network_error' || status.reason == 'server_error') {
+        if (status.reason == 'network_error' ||
+            status.reason == 'server_error') {
           return; // Offline'da veya sunucu kesintilerinde mevcut session'ı koru
         }
         // License/Trial is invalid or expired! Stop sync and lock application.
         stop();
-        if (status.reason == 'device_revoked') {
-          final context = navigatorKey.currentContext;
-          if (context != null && context.mounted) {
-            _showRevokedDialogAndRedirect(context);
-          } else {
-            _redirectToGate();
-          }
-        } else {
-          await _redirectToGate();
+        _showRevokedNoticeOnGate = status.reason == 'device_revoked';
+        if (kDebugMode && _showRevokedNoticeOnGate) {
+          debugPrint('redirectedToActivation: true');
         }
+        await _redirectToGate();
       }
     } catch (e) {
       debugPrint('FeatureSyncService: Error checking status: $e');
     } finally {
       _isSyncing = false;
     }
-  }
-
-  void _showRevokedDialogAndRedirect(BuildContext context) {
-    if (kDebugMode) {
-      debugPrint('redirectedToActivation: true');
-    }
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF231E2D),
-          title: const Text(
-            'Lisans Bağlantısı Kaldırıldı',
-            style: TextStyle(color: Color(0xFFFFF7EC), fontWeight: FontWeight.bold),
-          ),
-          content: const Text(
-            'Bu cihazın lisans bağlantısı yönetici tarafından kaldırıldı. Devam etmek için yeniden lisans anahtarı girmeniz gerekir.',
-            style: TextStyle(color: Color(0xFF8A8694)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                unawaited(_redirectToGate());
-              },
-              child: const Text(
-                'Tamam',
-                style: TextStyle(color: Color(0xFFF9AB3E), fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   Future<bool> _ensureRuntimeKioskIsActive() async {
@@ -147,8 +118,12 @@ class FeatureSyncService with WidgetsBindingObserver {
   }
 
   void _navigateToGate() {
+    final showRevokedNotice = _showRevokedNoticeOnGate;
+    _showRevokedNoticeOnGate = false;
     navigatorKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LicenseGate()),
+      MaterialPageRoute(
+        builder: (_) => LicenseGate(showRevokedNotice: showRevokedNotice),
+      ),
       (route) => false,
     );
   }
@@ -289,13 +264,8 @@ class _RuntimeLicenseKioskMaintenanceScreenState
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : Text(
-                            tr(
-                              'Kiosk Modunu Tekrar Aç',
-                              'Restore Kiosk Mode',
-                            ),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            tr('Kiosk Modunu Tekrar Aç', 'Restore Kiosk Mode'),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                   ),
                 ),

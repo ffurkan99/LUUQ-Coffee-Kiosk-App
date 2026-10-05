@@ -27,7 +27,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues(_storedLicenseCache());
     PackageInfo.setMockInitialValues(
       appName: 'LUUQ',
-      packageName: 'com.example.luuqapp',
+      packageName: 'com.luuq.kiosk',
       version: '1.1.0',
       buildNumber: '13',
       buildSignature: '',

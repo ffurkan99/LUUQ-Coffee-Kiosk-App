@@ -86,6 +86,25 @@ class VersionInfo {
     return versionCode > other.versionCode;
   }
 
+  /// Whether [current] is older than the panel's [minimum]. A minimum without
+  /// a build number compares version names only. Unparseable values never
+  /// block: a typo in the panel must not lock every kiosk.
+  static bool isBelowMinimum(String current, String? minimum) {
+    final min = VersionInfo.parse(minimum ?? '');
+    final cur = VersionInfo.parse(current);
+    final numeric = RegExp(r'^\d+\.\d+\.\d+$');
+    if (min == null ||
+        cur == null ||
+        !numeric.hasMatch(min.versionName) ||
+        !numeric.hasMatch(cur.versionName)) {
+      return false;
+    }
+    if (min.versionCode <= 0) {
+      return compareVersionNames(cur.versionName, min.versionName) < 0;
+    }
+    return !cur.isEqualOrNewerThan(min);
+  }
+
   /// Returns `true` when this version is the same as or newer than [other].
   bool isEqualOrNewerThan(VersionInfo other) {
     final cmp = compareVersionNames(versionName, other.versionName);

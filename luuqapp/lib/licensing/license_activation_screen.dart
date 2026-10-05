@@ -11,11 +11,17 @@ class LicenseActivationScreen extends StatefulWidget {
   final String? errorMessage;
   final VoidCallback? onStorageFailure;
 
+  /// Opened from a running trial to enter a full license key. The key form is
+  /// shown directly; the saved (trial) state is never re-checked, because an
+  /// active trial would close the screen at once via [onActivated].
+  final bool upgradeMode;
+
   const LicenseActivationScreen({
     super.key,
     required this.onActivated,
     this.errorMessage,
     this.onStorageFailure,
+    this.upgradeMode = false,
   });
 
   @override
@@ -37,7 +43,11 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen>
   void initState() {
     super.initState();
     _errorMessage = widget.errorMessage;
-    _checkSavedKey();
+    if (widget.upgradeMode) {
+      _showNewKeyInput = true;
+    } else {
+      _checkSavedKey();
+    }
     WidgetsBinding.instance.addObserver(this);
   }
 

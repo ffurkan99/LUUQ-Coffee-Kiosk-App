@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -37,6 +38,21 @@ class LicenseService {
   LicenseStatus get currentStatus => statusNotifier.value;
 
   FeatureFlags get currentFeatureFlags => currentStatus.features;
+
+  /// Reason code of a 4xx activation rejection, or null when the body is not a
+  /// recognisable server answer (proxies, HTML error pages, 5xx).
+  static String? _rejectionReason(http.Response response) {
+    if (response.statusCode < 400 || response.statusCode >= 500) return null;
+    try {
+      final decoded = json.decode(response.body);
+      if (decoded is! Map) return null;
+      final reason = decoded['reason']?.toString().trim();
+      if (reason == null || reason.isEmpty) return null;
+      return RegExp(r'^[a-z_]{3,64}$').hasMatch(reason) ? reason : null;
+    } on FormatException {
+      return null;
+    }
+  }
 
   Map<String, dynamic> _decodeExpectedLicenseResponse(String responseBody) {
     final dynamic decoded = json.decode(responseBody);
@@ -106,6 +122,7 @@ class LicenseService {
           await DeviceIdentityService.getDeviceFingerprintHash();
       final deviceModel = await DeviceIdentityService.getDeviceModel();
       final appVersion = await DeviceIdentityService.getAppVersion();
+      final menuAccessToken = await LicenseStorage.getMenuAccessToken();
       if (kDebugMode) {
         debugPrint('validate-license app_version: $appVersion');
       }
@@ -119,6 +136,8 @@ class LicenseService {
         'device_model': deviceModel,
         'app_version': appVersion,
         'platform': platformName,
+        if (menuAccessToken != null && menuAccessToken.isNotEmpty)
+          'menu_access_token': menuAccessToken,
       };
 
       if (kDebugMode) {
@@ -166,7 +185,14 @@ class LicenseService {
           );
         }
       } else {
-        return LicenseStatus.inactive('server_error', LicenseMode.none);
+        // The server answers business failures (wrong key, expired, device
+        // limit, re-enrollment) with 4xx + a JSON reason. Surface that reason
+        // instead of a generic "server unreachable" message.
+        return LicenseStatus.inactive(
+          _rejectionReason(response) ?? 'server_error',
+          LicenseMode.none,
+          lastCheckedAt: DateTime.now(),
+        );
       }
     } on LicenseStorageException catch (error) {
       debugPrint('[LICENSE][STORAGE] validateLicense failed: $error');
@@ -208,6 +234,7 @@ class LicenseService {
           await DeviceIdentityService.getDeviceFingerprintHash();
       final deviceModel = await DeviceIdentityService.getDeviceModel();
       final appVersion = await DeviceIdentityService.getAppVersion();
+      final menuAccessToken = await LicenseStorage.getMenuAccessToken();
       if (kDebugMode) {
         debugPrint('check-status app_version: $appVersion');
       }
@@ -220,6 +247,8 @@ class LicenseService {
         'device_model': deviceModel,
         'app_version': appVersion,
         'license_key': licenseKey,
+        if (menuAccessToken != null && menuAccessToken.isNotEmpty)
+          'menu_access_token': menuAccessToken,
       };
 
       if (kDebugMode) {
@@ -367,6 +396,13 @@ class LicenseService {
         return 'Lisans süresi dolmuş.';
       case 'device_limit_reached':
         return 'Bu lisans için cihaz limiti dolmuş.';
+      case 'device_reenrollment_required':
+      case 'menu_profile_reenrollment_required':
+        return 'Bu cihazın kaydı sıfırlanmış. Lisans anahtarını tekrar girerek yeniden kaydedin; sorun sürerse yöneticinize başvurun.';
+      case 'device_binding_mismatch':
+        return 'Bu cihaz lisansla eşleşmiyor. Lisans anahtarını tekrar girerek cihazı yeniden kaydedin.';
+      case 'rate_limited':
+        return 'Çok fazla deneme yapıldı. Lütfen biraz bekleyip tekrar deneyin.';
       case 'trial_already_used':
         return 'Bu cihazda deneme sürümü daha önce kullanılmış.';
       case 'trial_expired':

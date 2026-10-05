@@ -279,11 +279,11 @@ class _FakeSecureStorage extends FlutterSecureStorage {
   @override
   Future<String?> read({
     required String key,
-    IOSOptions? iOptions,
+    AppleOptions? iOptions,
     AndroidOptions? aOptions,
     LinuxOptions? lOptions,
     WebOptions? webOptions,
-    MacOsOptions? mOptions,
+    AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
     final handler = onRead;
@@ -295,11 +295,11 @@ class _FakeSecureStorage extends FlutterSecureStorage {
   Future<void> write({
     required String key,
     required String? value,
-    IOSOptions? iOptions,
+    AppleOptions? iOptions,
     AndroidOptions? aOptions,
     LinuxOptions? lOptions,
     WebOptions? webOptions,
-    MacOsOptions? mOptions,
+    AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
     final handler = onWrite;
@@ -314,11 +314,11 @@ class _FakeSecureStorage extends FlutterSecureStorage {
   @override
   Future<void> delete({
     required String key,
-    IOSOptions? iOptions,
+    AppleOptions? iOptions,
     AndroidOptions? aOptions,
     LinuxOptions? lOptions,
     WebOptions? webOptions,
-    MacOsOptions? mOptions,
+    AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
     final handler = onDelete;
@@ -328,11 +328,11 @@ class _FakeSecureStorage extends FlutterSecureStorage {
 
   @override
   Future<void> deleteAll({
-    IOSOptions? iOptions,
+    AppleOptions? iOptions,
     AndroidOptions? aOptions,
     LinuxOptions? lOptions,
     WebOptions? webOptions,
-    MacOsOptions? mOptions,
+    AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
     final handler = onDeleteAll;

@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:luuqapp/main.dart';
@@ -10,8 +12,188 @@ import 'package:luuqapp/licensing/license_gate.dart';
 import 'package:luuqapp/licensing/license_service.dart';
 import 'package:luuqapp/licensing/license_status.dart';
 import 'package:luuqapp/src/who_pays/lottery_simulation.dart';
+import 'package:luuqapp/src/who_pays/lottery_machine_view.dart';
+
+Future<void> _pumpFrames(WidgetTester tester, [Duration? duration]) async {
+  if (duration == null) {
+    await tester.pump();
+    return;
+  }
+  var remaining = duration.inMicroseconds;
+  while (remaining > 0) {
+    final step = remaining > 16667 ? 16667 : remaining;
+    await tester.pump(Duration(microseconds: step));
+    remaining -= step;
+  }
+}
 
 void main() {
+  testWidgets('app clamps system text enlargement to 120 percent', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(const LuuqApp());
+    expect(
+      MediaQuery.textScalerOf(tester.element(find.byType(LicenseGate)))
+          .scale(20),
+      24,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  for (final language in AppLanguage.values) {
+    testWidgets('enlarged text and reduced motion work in kiosk $language', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      appLanguageNotifier.value = language;
+      final oldTheme = appThemeNotifier.value;
+      addTearDown(() {
+        appThemeNotifier.value = oldTheme;
+        _disableLicensedKiosk();
+      });
+      appThemeNotifier.value = AppTheme.newYear;
+      await _pumpKioskAtSize(
+        tester,
+        const Size(1920, 1080),
+        textScale: 1.2,
+        disableAnimations: true,
+      );
+      await _openWhoPaysDialog(tester, language: language);
+      expect(tester.takeException(), isNull);
+      final draw = language == AppLanguage.tr
+          ? 'KARIŞTIR & ÇEK!'
+          : 'MIX & DRAW!';
+      await tester.tap(find.text(draw));
+      await _pumpFrames(tester, const Duration(milliseconds: 500));
+      expect(tester.takeException(), isNull);
+      final machine = tester.widget<WhoPaysLotteryMachineView>(
+        find.byType(WhoPaysLotteryMachineView),
+      );
+      final completedWithWinner = language == AppLanguage.tr
+          ? find
+                .textContaining(RegExp(r'^Hesap [1-6]\. kişide! 🎉$'))
+                .evaluate()
+                .isNotEmpty
+          : find
+                .textContaining(RegExp(r'^Person [1-6] pays the bill! 🎉$'))
+                .evaluate()
+                .isNotEmpty;
+      final completedWithFailure = language == AppLanguage.tr
+          ? find
+                .text('Top deliğe ulaşamadı. Lütfen tekrar deneyin.')
+                .evaluate()
+                .isNotEmpty
+          : find
+                .text('The balls did not reach the opening. Please try again.')
+                .evaluate()
+                .isNotEmpty;
+      expect(completedWithWinner || completedWithFailure, isTrue);
+      if (completedWithWinner) {
+        expect(machine.simulation.phase, WhoPaysLotteryPhase.seated);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+  for (final size in [const Size(1920, 1080), const Size(1024, 600)]) {
+    testWidgets('result physics survives lifecycle and redraw at $size', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(tester, size);
+      await _openWhoPaysDialog(tester);
+      await tester.tap(find.text('KARIŞTIR & ÇEK!'));
+      await _pumpFrames(tester, const Duration(seconds: 4));
+      final view = tester.widget<WhoPaysLotteryMachineView>(
+        find.byType(WhoPaysLotteryMachineView),
+      );
+      final sim = view.simulation;
+      final winner = sim.capturedBallIndex!;
+      final loser = (winner + 1) % sim.personCount;
+      sim.balls[loser].position = const Offset(0, -85);
+      sim.balls[loser].velocity = Offset.zero;
+      sim.wake();
+      await _pumpFrames(tester, const Duration(milliseconds: 100));
+      expect(sim.balls[loser].position.dy, greaterThan(-85));
+      final time = sim.timelineSeconds;
+      final position = sim.balls[loser].position;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump(const Duration(seconds: 20));
+      expect(sim.timelineSeconds, time);
+      expect(sim.balls[loser].position, position);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await _pumpFrames(tester, const Duration(milliseconds: 150));
+      expect(sim.timelineSeconds, greaterThan(time));
+      expect(sim.timelineSeconds, lessThan(time + 0.2));
+      expect(sim.capturedBallIndex, winner);
+      expect(find.text('Tekrar Çek'), findsOneWidget);
+      if (const bool.fromEnvironment('LOTTERY_QA_CAPTURE')) {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find
+              .ancestor(
+                of: find.byType(Dialog),
+                matching: find.byType(RepaintBoundary),
+              )
+              .first,
+        );
+        await tester.runAsync(() async {
+          final image = await boundary.toImage();
+          final bytes = await image.toByteData(format: ImageByteFormat.png);
+          final output = File(
+            'build/lottery-qa/result-${size.width.toInt()}.png',
+          );
+          await output.parent.create(recursive: true);
+          await output.writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+      await tester.tap(find.text('Tekrar Çek'));
+      await tester.pump();
+      final next = tester
+          .widget<WhoPaysLotteryMachineView>(
+            find.byType(WhoPaysLotteryMachineView),
+          )
+          .simulation;
+      expect(next, isNot(same(sim)));
+      expect(next.balls[loser].position, sim.balls[loser].position);
+      expect(next.balls[loser].velocity, sim.balls[loser].velocity);
+      await _pumpFrames(tester, const Duration(seconds: 5));
+      expect(find.text('Tekrar Çek'), findsOneWidget);
+      // Keep the existing kiosk idle timeout from closing the test dialog.
+      for (var i = 0; i < 5; i++) {
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(const ValueKey('who_pays_card')),
+            matching: find.text('HESAP KİMDE?'),
+          ),
+        );
+        await _pumpFrames(tester, const Duration(seconds: 5));
+      }
+      expect(next.isSleeping, isTrue);
+      final sleepingTime = next.timelineSeconds;
+      await _pumpFrames(tester, const Duration(seconds: 1));
+      expect(
+        next.timelineSeconds,
+        sleepingTime,
+        reason: 'UI ticker should stop at rest',
+      );
+      await tester.tap(find.text('Tekrar Çek'));
+      await _pumpFrames(tester, const Duration(milliseconds: 150));
+      final awake = tester
+          .widget<WhoPaysLotteryMachineView>(
+            find.byType(WhoPaysLotteryMachineView),
+          )
+          .simulation;
+      expect(awake.isSleeping, isFalse);
+      expect(awake.timelineSeconds, greaterThan(0));
+      await tester.tap(find.byKey(const ValueKey('who_pays_close_button')));
+      await _pumpFrames(tester, const Duration(milliseconds: 400));
+      expect(find.byType(WhoPaysLotteryMachineView), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      _disableLicensedKiosk();
+    });
+  }
   setUpAll(_loadRobotoForWidgetTests);
 
   tearDown(() {
@@ -28,7 +210,7 @@ void main() {
     expect(find.byType(LuuqApp), findsOneWidget);
     expect(find.byType(LicenseGate), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpFrames(tester, const Duration(milliseconds: 350));
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
@@ -70,7 +252,7 @@ void main() {
     expect(tester.getSize(initialCloseButton).height, greaterThanOrEqualTo(44));
     expect(find.bySemanticsLabel('Hesap Kimde ekranını kapat'), findsOneWidget);
     await tester.tapAt(const Offset(8, 8));
-    await tester.pump(const Duration(milliseconds: 300));
+    await _pumpFrames(tester, const Duration(milliseconds: 300));
     expect(find.text('KARIŞTIR & ÇEK!'), findsOneWidget);
 
     // Dokunma geri bildirimi standardı: diyalogdaki basılabilir öğeler
@@ -85,15 +267,16 @@ void main() {
     );
 
     await tester.tap(find.text('KARIŞTIR & ÇEK!'));
-    await tester.pump();
+    await _pumpFrames(tester);
     expect(find.text('KARILIYOR...'), findsOneWidget);
 
-    await tester.pump(
+    await _pumpFrames(
+      tester,
       Duration(
         milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
       ),
     );
-    await tester.pump();
+    await _pumpFrames(tester);
 
     expect(
       find.textContaining(RegExp(r'^Hesap [1-6]\. kişide! 🎉$')),
@@ -138,42 +321,20 @@ void main() {
 
     // Yeniden çekiliş: sonuç topu geri emilir, yeni çekiliş tam süre oynar.
     await tester.tap(find.text('Tekrar Çek'));
-    await tester.pump();
+    await _pumpFrames(tester);
     expect(find.text('KARILIYOR...'), findsOneWidget);
 
-    // Süreklilik kanıtı: yeniden çekiliş intake nedeniyle 3850 ms sürer —
-    // idle süre + pay geçtikten sonra sonuç HENÜZ görünmemeli.
-    //
-    // Not: kontrol noktası idle süreden (3400 ms) sadece 200 ms sonraya
-    // konursa kanıt yanlış pozitif verir: sonuç paneli ile "KARILIYOR..."
-    // düğmesi arasında 300 ms'lik bir AnimatedSwitcher geçişi var, bu
-    // yüzden bozuk/eski (initialState geçirilmemiş) 3400 ms'lik bir
-    // simülasyon bile 3400+200=3600 ms'de "KARILIYOR..." widget'ını hâlâ
-    // (geçiş animasyonunun kalıntısı olarak) ağaçta bırakır. Kontrol
-    // noktasını, 300 ms'lik geçişi geride bırakacak ama gerçek 3850 ms'lik
-    // yeniden çekilişin bitişinden (idle + 450 ms) önce kalacak şekilde
-    // idle + 375 ms'ye taşıyoruz.
-    const probeOffsetMs = 375;
-    await tester.pump(
-      const Duration(
-        milliseconds:
-            WhoPaysLotterySimulation.idleDurationMilliseconds + probeOffsetMs,
-      ),
-    );
-    expect(find.text('KARILIYOR...'), findsOneWidget);
-    expect(find.text('Tekrar Çek'), findsNothing);
-
-    await tester.pump(
-      Duration(
-        milliseconds:
-            WhoPaysLotterySimulation.redrawDurationMilliseconds +
-            200 -
-            WhoPaysLotterySimulation.idleDurationMilliseconds -
-            probeOffsetMs,
-      ),
-    );
-    await tester.pump();
-
+    // Redraw sonucu sabit nominal süreye değil, topun fiziksel olarak
+    // yuvaya oturmasına bağlıdır. Bu nedenle test sonucu sabit bir karede
+    // değil, sonuç aksiyonu görünene kadar sınırlı biçimde bekler.
+    for (
+      var attempt = 0;
+      attempt < 120 &&
+          find.byKey(const ValueKey('who_pays_redraw_button')).evaluate().isEmpty;
+      attempt++
+    ) {
+      await _pumpFrames(tester, const Duration(milliseconds: 100));
+    }
     expect(
       find.textContaining(RegExp(r'^Hesap [1-6]\. kişide! 🎉$')),
       findsOneWidget,
@@ -203,7 +364,7 @@ void main() {
     expect(idleCloseRect.height, greaterThanOrEqualTo(44));
 
     await tester.tap(find.text('KARIŞTIR & ÇEK!'));
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpFrames(tester, const Duration(milliseconds: 350));
     expect(find.text('KARILIYOR...'), findsOneWidget);
     expect(tester.getSize(card), idleSize);
     expect(
@@ -211,14 +372,15 @@ void main() {
       idleCloseRect,
     );
 
-    await tester.pump(
+    await _pumpFrames(
+      tester,
       Duration(
         milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
       ),
     );
-    await tester.pump(const Duration(milliseconds: 150));
+    await _pumpFrames(tester, const Duration(milliseconds: 150));
     expect(tester.takeException(), isNull);
-    await tester.pump(const Duration(milliseconds: 200));
+    await _pumpFrames(tester, const Duration(milliseconds: 200));
     expect(find.text('Tekrar Çek'), findsOneWidget);
     expect(tester.getSize(card), idleSize);
     expect(
@@ -244,13 +406,14 @@ void main() {
     expect(find.bySemanticsLabel('Close Who Pays'), findsOneWidget);
 
     await tester.tap(find.text('MIX & DRAW!'));
-    await tester.pump();
-    await tester.pump(
+    await _pumpFrames(tester);
+    await _pumpFrames(
+      tester,
       Duration(
         milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
       ),
     );
-    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpFrames(tester, const Duration(milliseconds: 350));
 
     expect(
       find.textContaining(RegExp(r'^Person [1-6] pays the bill! 🎉$')),
@@ -282,13 +445,27 @@ void main() {
     try {
       await _openWhoPaysDialog(tester);
       await tester.tap(find.text('KARIŞTIR & ÇEK!'));
-      await tester.pump();
-      await tester.pump(
+      await _pumpFrames(tester);
+      await _pumpFrames(
+        tester,
         Duration(
           milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 50,
         ),
       );
-      await tester.pump(const Duration(milliseconds: 150));
+      await _pumpFrames(tester, const Duration(milliseconds: 150));
+
+      // Fiziksel capture sonucu nominal sürede değil, top gerçekten yuvaya
+      // oturduğunda bildirilir. Dar görünüm testi bu fiziksel sonucu sabit bir
+      // kareye bağlamamalı; sonuç aksiyonu görünene kadar sınırlı biçimde
+      // ilerlemelidir.
+      for (
+        var attempt = 0;
+        attempt < 120 &&
+            find.byKey(const ValueKey('who_pays_redraw_button')).evaluate().isEmpty;
+        attempt++
+      ) {
+        await _pumpFrames(tester, const Duration(milliseconds: 100));
+      }
 
       expect(find.textContaining('Hesap '), findsOneWidget);
       final winnerRect = tester.getRect(
@@ -322,26 +499,27 @@ void main() {
     await _openWhoPaysDialog(tester);
 
     await tester.tap(find.text('6').first);
-    await tester.pump();
+    await _pumpFrames(tester);
     expect(find.text('6. Kişi'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('KARIŞTIR & ÇEK!'));
-    await tester.pump();
+    await _pumpFrames(tester);
     expect(find.text('KARILIYOR...'), findsOneWidget);
 
     await tester.tap(find.text('KARILIYOR...'));
-    await tester.pump(const Duration(milliseconds: 100));
+    await _pumpFrames(tester, const Duration(milliseconds: 100));
     expect(find.text('KARILIYOR...'), findsOneWidget);
     expect(find.text('KARIŞTIR & ÇEK!'), findsNothing);
     expect(tester.takeException(), isNull);
 
-    await tester.pump(
+    await _pumpFrames(
+      tester,
       Duration(
         milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
       ),
     );
-    await tester.pump();
+    await _pumpFrames(tester);
     expect(find.text('Tekrar Çek'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
@@ -361,11 +539,11 @@ void main() {
     await _openWhoPaysDialog(tester);
 
     await tester.tap(find.text('KARIŞTIR & ÇEK!'));
-    await tester.pump();
+    await _pumpFrames(tester);
     expect(find.text('KARILIYOR...'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 200));
-    await tester.pump();
+    await _pumpFrames(tester, const Duration(milliseconds: 200));
+    await _pumpFrames(tester);
     expect(find.text('Tekrar Çek'), findsOneWidget);
     expect(find.text('Kapat'), findsOneWidget);
     final winnerRect = tester.getRect(
@@ -397,6 +575,7 @@ Future<void> _pumpKioskAtSize(
   WidgetTester tester,
   Size size, {
   bool disableAnimations = false,
+  double textScale = 1.0,
 }) async {
   tester.view
     ..physicalSize = size
@@ -409,7 +588,7 @@ Future<void> _pumpKioskAtSize(
       builder: (context, child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(
-            textScaler: const TextScaler.linear(1.0),
+            textScaler: TextScaler.linear(textScale),
             disableAnimations: disableAnimations,
           ),
           child: child!,
@@ -440,7 +619,7 @@ Future<void> _pumpKioskAtSize(
       home: const CafeKioskScreen(),
     ),
   );
-  await tester.pump(const Duration(milliseconds: 350));
+  await _pumpFrames(tester, const Duration(milliseconds: 350));
 }
 
 Future<void> _openWhoPaysDialog(
@@ -461,15 +640,15 @@ Future<void> _openWhoPaysDialog(
   );
   for (var i = 0; i < 60 && find.text(launchLabel).evaluate().isEmpty; i++) {
     await tester.tapAt(viewportCenter);
-    await tester.pump(const Duration(milliseconds: 100));
+    await _pumpFrames(tester, const Duration(milliseconds: 100));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
     );
   }
   expect(find.text(launchLabel), findsOneWidget);
   await tester.tap(find.text(launchLabel));
-  await tester.pump(const Duration(milliseconds: 300));
-  await tester.pump(const Duration(milliseconds: 300));
+  await _pumpFrames(tester, const Duration(milliseconds: 300));
+  await _pumpFrames(tester, const Duration(milliseconds: 300));
   expect(find.text(drawLabel), findsOneWidget);
   expect(find.byKey(const ValueKey('who_pays_machine')), findsOneWidget);
 }

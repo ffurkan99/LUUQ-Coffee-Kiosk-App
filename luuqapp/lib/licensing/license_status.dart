@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import 'feature_flags.dart';
 
 enum LicenseMode { licensed, trial, none }
@@ -21,6 +22,16 @@ class LicenseStatus {
   final int? apkSizeBytes;
   final String? releaseNotes;
   final String? publishedAt;
+  final String? menuAccessToken;
+  final String? menuProfileId;
+  final int? menuProfileGeneration;
+
+  /// Panel "Bakım Modu": the customer screen is closed with [maintenanceMessage].
+  final bool maintenanceEnabled;
+  final String? maintenanceMessage;
+
+  /// Panel "Minimum Uygulama Sürümü"; older builds show an update-required screen.
+  final String? minimumAppVersion;
 
   const LicenseStatus({
     required this.active,
@@ -40,6 +51,12 @@ class LicenseStatus {
     this.apkSizeBytes,
     this.releaseNotes,
     this.publishedAt,
+    this.menuAccessToken,
+    this.menuProfileId,
+    this.menuProfileGeneration,
+    this.maintenanceEnabled = false,
+    this.maintenanceMessage,
+    this.minimumAppVersion,
   });
 
   factory LicenseStatus.fromJson(
@@ -49,31 +66,44 @@ class LicenseStatus {
   }) {
     final active = json['active'] ?? false;
     final updateJson = json['update'] as Map<String, dynamic>?;
-    final bool updateAvailable = updateJson != null && (updateJson['available'] == true || updateJson['available']?.toString() == 'true');
+    final bool updateAvailable =
+        updateJson != null &&
+        (updateJson['available'] == true ||
+            updateJson['available']?.toString() == 'true');
     final String? latestVersion = updateJson?['latest_version']?.toString();
     final String? apkUrl = updateJson?['apk_url']?.toString();
     final String? apkSha256 = updateJson?['apk_sha256']?.toString();
-    final int? apkSizeBytes = updateJson?['apk_size_bytes'] != null ? int.tryParse(updateJson!['apk_size_bytes'].toString()) : null;
+    final int? apkSizeBytes = updateJson?['apk_size_bytes'] != null
+        ? int.tryParse(updateJson!['apk_size_bytes'].toString())
+        : null;
     final String? releaseNotes = updateJson?['release_notes']?.toString();
     final String? publishedAt = updateJson?['published_at']?.toString();
+    final String? menuAccessToken = json['menu_access_token']?.toString();
+    final String? menuProfileId = json['menu_profile_id']?.toString();
+    final int? menuProfileGeneration = json['menu_profile_generation'] != null
+        ? int.tryParse(json['menu_profile_generation'].toString())
+        : null;
+    final maintenanceJson = json['maintenance'];
+    final maintenanceEnabled =
+        maintenanceJson is Map &&
+        (maintenanceJson['enabled'] == true ||
+            maintenanceJson['enabled']?.toString() == 'true' ||
+            maintenanceJson['enabled']?.toString() == '1');
+    final maintenanceMessage = maintenanceJson is Map
+        ? maintenanceJson['message']?.toString()
+        : null;
+    final minimumAppVersion = json['minimum_app_version']?.toString();
     final modeStr = json['mode']?.toString() ?? '';
     final planStr = json['plan']?.toString() ?? '';
-    
+
     final trialValues = {'trial', 'deneme', 'demo', 'basic_trial'};
     final licensedValues = {
-      'licensed',
-      'active',
-      'pro',
-      'premium',
-      'yearly',
-      'annual',
-      'yillik',
-      'yıllık'
+      'licensed', 'active', 'pro', 'premium', 'yearly', 'annual',
+      'yillik', 'yıllık',
     };
 
     final modeLower = modeStr.trim().toLowerCase();
     final planLower = planStr.trim().toLowerCase();
-
     LicenseMode resolvedMode = defaultMode;
     if (trialValues.contains(modeLower) ||
         trialValues.contains(planLower) ||
@@ -94,11 +124,9 @@ class LicenseStatus {
     final fallbackFlags = resolvedMode == LicenseMode.trial
         ? FeatureFlags.trialDefault
         : (resolvedMode == LicenseMode.licensed
-            ? FeatureFlags.proDefault
-            : FeatureFlags.lockedAll);
-
+              ? FeatureFlags.proDefault
+              : FeatureFlags.lockedAll);
     final featuresJson = json['features'] as Map<String, dynamic>?;
-    
     String featureSource = 'none';
     FeatureFlags parsedFeatures;
     if (!active) {
@@ -111,10 +139,11 @@ class LicenseStatus {
       parsedFeatures = fallbackFlags;
       featureSource = resolvedMode == LicenseMode.trial
           ? 'trial_fallback'
-          : (resolvedMode == LicenseMode.licensed ? 'licensed_fallback' : 'locked_all_fallback');
+          : (resolvedMode == LicenseMode.licensed
+                ? 'licensed_fallback'
+                : 'locked_all_fallback');
     }
 
-    // Force trial restrictions if resolved mode is trial
     if (resolvedMode == LicenseMode.trial) {
       parsedFeatures = FeatureFlags(
         whoPays: false,
@@ -135,7 +164,7 @@ class LicenseStatus {
     if (kDebugMode) {
       debugPrint(
         'LicenseStatus.fromJson: mode=$modeStr, plan=$planStr, '
-        'resolvedMode=${resolvedMode.name}, featureSource=$featureSource'
+        'resolvedMode=${resolvedMode.name}, featureSource=$featureSource',
       );
     }
 
@@ -157,6 +186,12 @@ class LicenseStatus {
       apkSizeBytes: apkSizeBytes,
       releaseNotes: releaseNotes,
       publishedAt: publishedAt,
+      menuAccessToken: menuAccessToken,
+      menuProfileId: menuProfileId,
+      menuProfileGeneration: menuProfileGeneration,
+      maintenanceEnabled: active == true && maintenanceEnabled,
+      maintenanceMessage: maintenanceMessage,
+      minimumAppVersion: minimumAppVersion,
     );
   }
 
@@ -191,25 +226,20 @@ class LicenseStatus {
           apkSha256 == other.apkSha256 &&
           apkSizeBytes == other.apkSizeBytes &&
           releaseNotes == other.releaseNotes &&
-          publishedAt == other.publishedAt;
+          publishedAt == other.publishedAt &&
+          menuAccessToken == other.menuAccessToken &&
+          menuProfileId == other.menuProfileId &&
+          menuProfileGeneration == other.menuProfileGeneration &&
+          maintenanceEnabled == other.maintenanceEnabled &&
+          maintenanceMessage == other.maintenanceMessage &&
+          minimumAppVersion == other.minimumAppVersion;
 
   @override
   int get hashCode => Object.hashAll([
-        active,
-        mode,
-        branchName,
-        customerName,
-        plan,
-        expiresAt,
-        trialExpiresAt,
-        reason,
-        features,
-        updateAvailable,
-        latestVersion,
-        apkUrl,
-        apkSha256,
-        apkSizeBytes,
-        releaseNotes,
-        publishedAt,
-      ]);
+    active, mode, branchName, customerName, plan, expiresAt, trialExpiresAt,
+    reason, features, updateAvailable, latestVersion, apkUrl, apkSha256,
+    apkSizeBytes, releaseNotes, publishedAt, menuAccessToken, menuProfileId,
+    menuProfileGeneration, maintenanceEnabled, maintenanceMessage,
+    minimumAppVersion,
+  ]);
 }

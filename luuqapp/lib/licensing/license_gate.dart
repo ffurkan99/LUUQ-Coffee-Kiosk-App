@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../main.dart'; // To launch CafeKioskScreen
@@ -8,7 +11,16 @@ import 'license_status.dart';
 import 'license_storage.dart';
 
 class LicenseGate extends StatefulWidget {
-  const LicenseGate({super.key});
+  const LicenseGate({super.key, this.showRevokedNotice = false});
+
+  /// The running kiosk was revoked: explain why the activation form is shown.
+  final bool showRevokedNotice;
+
+  /// Wait before the n-th automatic retry while the license server is
+  /// unreachable: 5 s, 10 s, 20 s, 40 s, then every 60 s.
+  @visibleForTesting
+  static Duration autoRetryDelay(int attempt) =>
+      Duration(seconds: math.min(60, 5 * (1 << math.min(attempt, 4))));
 
   @override
   State<LicenseGate> createState() => _LicenseGateState();
@@ -22,6 +34,34 @@ class _LicenseGateState extends State<LicenseGate> {
   String? _gateError;
   String? _storageResetError;
 
+  /// While the license server is unreachable the check is retried on its own
+  /// (5 s, 10 s, ... up to 60 s), so a kiosk that started without network
+  /// opens by itself once the connection returns. Not an offline grace: the
+  /// customer screen still opens only after a successful server check.
+  Timer? _autoRetryTimer;
+  int _autoRetryAttempt = 0;
+
+  void _scheduleAutoRetry() {
+    _autoRetryTimer?.cancel();
+    final delay = LicenseGate.autoRetryDelay(_autoRetryAttempt);
+    _autoRetryAttempt++;
+    _autoRetryTimer = Timer(delay, () {
+      if (mounted && _isLicenseServerUnavailable) _checkLicenseFlow();
+    });
+  }
+
+  void _stopAutoRetry() {
+    _autoRetryTimer?.cancel();
+    _autoRetryTimer = null;
+    _autoRetryAttempt = 0;
+  }
+
+  @override
+  void dispose() {
+    _autoRetryTimer?.cancel();
+    super.dispose();
+  }
+
   static const _bgDark = Color(0xFF16131D);
   static const _gold = Color(0xFFF9AB3E);
   static const _cream = Color(0xFFFFF7EC);
@@ -30,10 +70,16 @@ class _LicenseGateState extends State<LicenseGate> {
   void initState() {
     super.initState();
     _checkLicenseFlow();
+    if (widget.showRevokedNotice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showRevokedDialog();
+      });
+    }
   }
 
   Future<void> _checkLicenseFlow() async {
     if (!mounted) return;
+    _autoRetryTimer?.cancel();
     setState(() {
       _isChecking = true;
       _isLicenseServerUnavailable = false;
@@ -68,6 +114,7 @@ class _LicenseGateState extends State<LicenseGate> {
       if (!mounted) return;
 
       if (status.active) {
+        _stopAutoRetry();
         _navigateToHome();
         return;
       }
@@ -82,8 +129,10 @@ class _LicenseGateState extends State<LicenseGate> {
           _isChecking = false;
           _isLicenseServerUnavailable = true;
         });
+        _scheduleAutoRetry();
         return;
       }
+      _stopAutoRetry();
 
       setState(() {
         _isChecking = false;
@@ -105,6 +154,7 @@ class _LicenseGateState extends State<LicenseGate> {
         _isChecking = false;
         _isLicenseServerUnavailable = true;
       });
+      _scheduleAutoRetry();
     }
   }
 
