@@ -59,6 +59,7 @@ part 'app/admin/volume_dialog.dart';
 part 'app/admin/app_info_dialog.dart';
 part 'app/update/update_dialog.dart';
 part 'app/kiosk/kiosk_screen.dart';
+part 'app/kiosk/kiosk_overlays.dart';
 
 FeatureFlags get currentFeatureFlags =>
     LicenseService.instance.currentFeatureFlags;
