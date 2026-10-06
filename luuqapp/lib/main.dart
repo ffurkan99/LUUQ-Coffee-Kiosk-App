@@ -2457,7 +2457,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                           // MAINTENANCE / UPDATE REQUIRED: covers the
                                           // customer UI; the update badge and the
                                           // logo (admin access) stay above it.
-                                          if (_serviceBlockMessage(licenseStatus)
+                                          if (_serviceBlockMessage(
+                                                licenseStatus,
+                                              )
                                               case final blockMessage?)
                                             Positioned.fill(
                                               child: _buildServiceBlockOverlay(
