@@ -1,6 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/library_source.dart';
 
 /// Menü verisine (ad, açıklama, etiket) Türkçe karakter içeren yeni bir metin
 /// eklendiğinde `_menuDict` sözlüğüne İngilizce karşılığı da eklenmeli;
@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// açıklaması bu şekilde iki denetim turunda elle bulunmuştu).
 void main() {
   test('every Turkish menu string has an EN dictionary entry', () {
-    final source = File('lib/main.dart').readAsStringSync();
+    final source = readMainLibrarySource();
 
     final dictRegion = _region(
       source,

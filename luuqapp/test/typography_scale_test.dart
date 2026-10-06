@@ -1,10 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/library_source.dart';
 
 void main() {
   test('main.dart honours the kiosk type scale and muted-text rules', () {
-    final source = File('lib/main.dart').readAsStringSync();
+    final source = readMainLibrarySource();
 
     // Kiosk tip ölçeği (docs/ui-audit-2026-07-21.md D1/D2): rozet tabanı
     // _fsBadge (12), ikincil metin tabanı _fsCaption (14). 10-13px serbest
