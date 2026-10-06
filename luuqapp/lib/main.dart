@@ -59,6 +59,7 @@ part 'app/admin/volume_dialog.dart';
 part 'app/admin/app_info_dialog.dart';
 part 'app/update/update_dialog.dart';
 part 'app/kiosk/kiosk_screen.dart';
+part 'app/kiosk/kiosk_menu_lookup.dart';
 part 'app/kiosk/kiosk_social.dart';
 part 'app/kiosk/kiosk_layout.dart';
 part 'app/kiosk/kiosk_overlays.dart';
