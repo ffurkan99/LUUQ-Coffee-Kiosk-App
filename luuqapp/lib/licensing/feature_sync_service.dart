@@ -9,6 +9,7 @@ import 'license_service.dart';
 import 'license_status.dart';
 import 'update_service.dart';
 import '../menu/menu_service.dart';
+import '../analytics/analytics_service.dart';
 
 class FeatureSyncService with WidgetsBindingObserver {
   static final FeatureSyncService instance = FeatureSyncService._();
@@ -104,6 +105,9 @@ class FeatureSyncService with WidgetsBindingObserver {
         // downloading images on a slow network must not hold this lock and
         // delay license, maintenance and connection checks.
         unawaited(MenuService.instance.syncNow(status: status));
+        // The server answered: send analytics events queued while offline
+        // (short outages never set connectionLost, so this is the trigger).
+        unawaited(AnalyticsService.instance.flushQueue());
       }
       if (!status.active) {
         // License/Trial is invalid or expired! Stop sync and lock application.

@@ -397,6 +397,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     activeInstance = this;
     UpdateService.enableKioskMode();
     FeatureSyncService.instance.start(this);
+    // Events a previous run could not send (sent after the next good check).
+    unawaited(AnalyticsService.instance.loadQueue());
     LicenseService.instance.statusNotifier.addListener(
       _handleLicenseStatusChange,
     );
