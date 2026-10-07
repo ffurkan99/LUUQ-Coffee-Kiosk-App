@@ -47,7 +47,12 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   bool _isClockwise = true;
   Drink? _selectedDrink;
   bool _showResult = false;
-  int? _lastWheelTickIndex;
+  final _pointerSim = WheelPointerSimulation();
+  final _pointerAngle = ValueNotifier<double>(0);
+  late final Ticker _pointerTicker = createTicker(_handlePointerTick);
+  Duration? _pointerLastElapsed;
+  int _pointerPegCount = 0;
+  double _pointerRimRadius = 0;
   _MenuItem? _baristaDrink;
   _MenuItem? _baristaDessert;
   late List<_MenuItem> _wheelMenuItems = _defaultWheelMenuItems();
@@ -789,6 +794,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
     if (isActive) {
       _syncMotionPreference();
+      _wakePointer();
       if (!_isLoading && !_isIdle) {
         _resetIdleTimer();
       }
@@ -797,6 +803,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
     _idleTimer?.cancel();
     _pulseController.stop(canceled: false);
+    _pointerTicker.stop();
     final controller = _videoController;
     if (controller != null) {
       unawaited(_pauseVideoIfReady(controller));
@@ -878,6 +885,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     if (videoController != null) {
       _disposeVideoController(videoController);
     }
+    _pointerTicker.dispose();
+    _pointerAngle.dispose();
     _spinController.dispose();
     _pulseController.dispose();
     _idleTimer?.cancel();
@@ -918,34 +927,39 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     }
   }
 
-  void _handleSpinFrame() {
-    _playWheelCollisionIfNeeded(_filteredDrinks, _spinController.value);
+  void _handleSpinFrame() => _wakePointer();
+
+  /// Runs the pointer simulation while the wheel moves or the pointer still
+  /// swings; it stops itself once everything is at rest, so an idle kiosk
+  /// spends nothing on it.
+  void _wakePointer() {
+    if (!_isAppActive || _pointerTicker.isActive) return;
+    _pointerLastElapsed = null;
+    _pointerTicker.start();
   }
 
-  void _startWheelCollisionTracking(List<Drink> available, double turns) {
-    _lastWheelTickIndex = _wheelTickIndex(available, turns);
-  }
-
-  void _playWheelCollisionIfNeeded(List<Drink> available, double turns) {
-    final tickIndex = _wheelTickIndex(available, turns);
-    if (tickIndex == null) return;
-
-    final lastTickIndex = _lastWheelTickIndex;
-    if (lastTickIndex == null) {
-      _lastWheelTickIndex = tickIndex;
-      return;
+  void _handlePointerTick(Duration elapsed) {
+    final previous = _pointerLastElapsed;
+    _pointerLastElapsed = elapsed;
+    final seconds = previous == null
+        ? 1 / 60
+        : (elapsed - previous).inMicroseconds / Duration.microsecondsPerSecond;
+    final releases = _pointerSim.advance(
+      turns: _spinController.value,
+      pegCount: _pointerPegCount,
+      rimRadius: _pointerRimRadius,
+      seconds: seconds,
+    );
+    // The tick sounds when the pointer slips off a peg and snaps back.
+    if (releases > 0) _spinSound.playTick();
+    _pointerAngle.value = MediaQuery.disableAnimationsOf(context)
+        ? 0
+        : _pointerSim.angle;
+    if (_pointerSim.isSettled &&
+        !_spinController.isAnimating &&
+        !_isDragging) {
+      _pointerTicker.stop();
     }
-
-    if (tickIndex != lastTickIndex) {
-      _lastWheelTickIndex = tickIndex;
-      _spinSound.playTick();
-    }
-  }
-
-  int? _wheelTickIndex(List<Drink> available, double turns) {
-    if (available.isEmpty) return null;
-    final segmentTurns = 1 / available.length;
-    return (turns / segmentTurns).floor();
   }
 
   String _findCategoryForDrink(Drink drink) {
@@ -1013,14 +1027,11 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       _isIdle = false; // Never idle while spinning
     });
 
-    _startWheelCollisionTracking(available, _spinController.value);
-
     _spinController.animateTo(targetTurns, curve: curve).whenComplete(() {
       if (!mounted) return;
       setState(() {
         _selectedDrink = nextDrink;
         _showResult = true;
-        _lastWheelTickIndex = null;
       });
       _spinSound.playResult();
       _resetIdleTimer(); // Restart idle timer after spin finishes
@@ -1751,6 +1762,26 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
               final wheelSize =
                   min(constraints.maxWidth, constraints.maxHeight) *
                   (isCompact ? 0.92 : 0.85);
+              final rimRadius = wheelSize / 2 - _wheelRimInset;
+              if (_pointerPegCount != available.length ||
+                  _pointerRimRadius != rimRadius) {
+                // New pegs (menu change, resize): let the pointer react.
+                if (_pointerPegCount == 0 &&
+                    available.isNotEmpty &&
+                    _spinController.value == 0) {
+                  // The first wheel starts with a segment under the
+                  // pointer, not a border (a peg pressing on it).
+                  final halfSegment = 0.5 / available.length;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && _spinController.value == 0) {
+                      _spinController.value = halfSegment;
+                    }
+                  });
+                }
+                _pointerPegCount = available.length;
+                _pointerRimRadius = rimRadius;
+                _wakePointer();
+              }
               return SizedBox(
                 width: wheelSize * 1.3,
                 height: wheelSize * 1.3,
@@ -1833,10 +1864,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                               details.localPosition.dx - localCenter.dx,
                             );
                             _dragBaseTurns = _spinController.value;
-                            _startWheelCollisionTracking(
-                              available,
-                              _spinController.value,
-                            );
                             setState(() => _isDragging = true);
                           },
                           onPanUpdate: (details) {
@@ -1854,7 +1881,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                 _dragBaseTurns + (angleDiff / (2 * pi));
                             _isClockwise = newTurns > _spinController.value;
                             _spinController.value = newTurns;
-                            _playWheelCollisionIfNeeded(available, newTurns);
                           },
                           onPanEnd: (details) {
                             if (isSpinning || !_isDragging) return;
@@ -1871,10 +1897,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                 duration: Duration(milliseconds: ms),
                                 curve: Curves.easeOutCubic,
                               );
-                            } else {
-                              setState(() {
-                                _lastWheelTickIndex = null;
-                              });
                             }
                           },
                           child: AnimatedBuilder(
@@ -2009,56 +2031,30 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                       ),
                     ),
 
-                    // Pointer
+                    // Pointer: a spring-loaded flapper that catches on the
+                    // rim pegs (WheelPointerSimulation, driven by
+                    // _handlePointerTick).
                     Positioned(
                       top:
-                          (wheelSize * 1.3 - wheelSize) / 2 -
-                          44, // Moved UP to sit exactly on the outer ring
-                      child: AnimatedBuilder(
-                        animation: _spinController,
-                        builder: (context, child) {
-                          double wobbleAngle = 0.0;
-
-                          if (isSpinning || _isDragging) {
-                            final turns = _spinController.value;
-                            final segmentTurns = 1.0 / available.length;
-                            final segmentProgress =
-                                ((turns / segmentTurns) % 1.0 + 1.0) % 1.0;
-
-                            if (_isClockwise) {
-                              if (segmentProgress > 0.80) {
-                                final t = (segmentProgress - 0.80) / 0.20;
-                                wobbleAngle =
-                                    -0.35 * Curves.easeIn.transform(t);
-                              } else if (segmentProgress < 0.25) {
-                                final t = segmentProgress / 0.25;
-                                wobbleAngle =
-                                    -0.35 *
-                                    (1.0 - Curves.elasticOut.transform(t));
-                              }
-                            } else {
-                              if (segmentProgress < 0.20) {
-                                final t = (0.20 - segmentProgress) / 0.20;
-                                wobbleAngle = 0.35 * Curves.easeIn.transform(t);
-                              } else if (segmentProgress > 0.75) {
-                                final t = (1.0 - segmentProgress) / 0.25;
-                                wobbleAngle =
-                                    0.35 *
-                                    (1.0 - Curves.elasticOut.transform(t));
-                              }
-                            }
-                          }
-
-                          return Transform.rotate(
-                            angle: wobbleAngle,
-                            alignment: Alignment.topCenter,
-                            child: child,
-                          );
-                        },
-                        child: SizedBox(
-                          width: 44,
-                          height: 44,
-                          child: CustomPaint(painter: _PointerPainter()),
+                          (wheelSize * 1.3 - wheelSize) / 2 +
+                          _wheelRimInset -
+                          WheelPointerSimulation.restTipGap -
+                          WheelPointerSimulation.length,
+                      child: RepaintBoundary(
+                        child: ValueListenableBuilder<double>(
+                          valueListenable: _pointerAngle,
+                          builder: (context, angle, child) {
+                            return Transform.rotate(
+                              angle: angle,
+                              alignment: Alignment.topCenter,
+                              child: child,
+                            );
+                          },
+                          child: SizedBox(
+                            width: 44,
+                            height: WheelPointerSimulation.length,
+                            child: CustomPaint(painter: _PointerPainter()),
+                          ),
                         ),
                       ),
                     ),
