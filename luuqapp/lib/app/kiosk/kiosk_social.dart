@@ -393,16 +393,19 @@ extension _KioskSocial on _CafeKioskScreenState {
               children: [
                 _buildSocialQrItem(
                   assetPath: 'assets/instagramqr.png',
+                  linkType: 'instagram',
                   title: 'INSTAGRAM',
                   size: qrSize,
                 ),
                 _buildSocialQrItem(
                   assetPath: 'assets/mapsqr.png',
+                  linkType: 'maps',
                   title: 'GOOGLE MAPS',
                   size: qrSize,
                 ),
                 _buildSocialQrItem(
                   assetPath: 'assets/wifiqr.png',
+                  linkType: 'wifi',
                   title: 'LUUQ WI-FI',
                   size: qrSize,
                 ),
@@ -414,6 +417,7 @@ extension _KioskSocial on _CafeKioskScreenState {
                 Expanded(
                   child: _buildSocialQrItem(
                     assetPath: 'assets/instagramqr.png',
+                    linkType: 'instagram',
                     title: 'INSTAGRAM',
                     size: qrSize,
                   ),
@@ -422,6 +426,7 @@ extension _KioskSocial on _CafeKioskScreenState {
                 Expanded(
                   child: _buildSocialQrItem(
                     assetPath: 'assets/mapsqr.png',
+                    linkType: 'maps',
                     title: 'GOOGLE MAPS',
                     size: qrSize,
                   ),
@@ -430,6 +435,7 @@ extension _KioskSocial on _CafeKioskScreenState {
                 Expanded(
                   child: _buildSocialQrItem(
                     assetPath: 'assets/wifiqr.png',
+                    linkType: 'wifi',
                     title: 'LUUQ WI-FI',
                     size: qrSize,
                   ),
@@ -472,17 +478,13 @@ extension _KioskSocial on _CafeKioskScreenState {
   Widget _buildSocialQrItem({
     required String assetPath,
     required String title,
+    required String linkType,
     required double size,
   }) {
     return BouncyButton(
       onTap: () {
-        final linkType = title.toLowerCase().contains('instagram')
-            ? 'instagram'
-            : title.toLowerCase().contains('wifi')
-            ? 'wifi'
-            : title.toLowerCase().contains('maps')
-            ? 'maps'
-            : 'other';
+        // Explicit type: guessing from the title counted Wi-Fi taps as
+        // "other" ("LUUQ WI-FI" never contains "wifi").
         AnalyticsService.instance.trackQrClick(linkType);
         AnalyticsService.instance.trackLinksClick();
         _showLargeQR(assetPath, title);

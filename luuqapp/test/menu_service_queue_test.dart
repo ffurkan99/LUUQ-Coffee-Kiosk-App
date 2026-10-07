@@ -369,6 +369,55 @@ void main() {
     );
     expect(await gated.readPendingConfig('profile:$_profileId'), isEmpty);
   });
+
+  test('images of the catalog on screen survive later syncs', () async {
+    List<int> jpegFor(String id) => [0xff, 0xd8, 0xff, ...utf8.encode(id)];
+    final imageClient = MockClient(
+      (request) async => http.Response.bytes(
+        jpegFor(request.url.pathSegments.last.split('.').first),
+        200,
+        headers: {'content-type': 'image/jpeg'},
+      ),
+    );
+    final imageCache = MenuCache(client: imageClient, rootDirectory: directory);
+    service = MenuService.forTest(cache: imageCache);
+    Map<String, Object?> catalogWith(String id) {
+      final response = _catalogResponse();
+      response['effective_revision'] = 'rev-$id';
+      ((response['catalog'] as Map)['categories'] as List).first['items'] = [
+        {
+          'id': id,
+          'category_id': 'c1',
+          'name_tr': 'Ürün $id',
+          'image_url': 'https://example.test/$id.jpg',
+          'image_sha256': sha256OfBytes(jpegFor(id)),
+          'image_mime': 'image/jpeg',
+        },
+      ];
+      return response;
+    }
+
+    Future<void> syncTo(String id) => http.runWithClient(
+      () => service.syncNow(force: true),
+      () => MockClient((request) async {
+        if (request.url.toString() == LicenseConfig.menuUrl) {
+          return http.Response(jsonEncode(catalogWith(id)), 200);
+        }
+        return http.Response('{}', 404);
+      }),
+    );
+
+    await syncTo('a');
+    final shown = service.catalogNotifier.value!;
+    final shownImage = shown.items.single.localImagePath!;
+    // The kiosk shows catalog "a" while a customer dialog holds back newer ones.
+    service.markDisplayed(shown);
+    await syncTo('b');
+    await syncTo('c');
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(File(shownImage).existsSync(), isTrue);
+  });
+
 }
 
 String sha256OfBytes(List<int> bytes) => sha256.convert(bytes).toString();

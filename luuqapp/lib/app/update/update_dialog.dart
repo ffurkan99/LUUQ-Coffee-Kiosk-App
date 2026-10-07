@@ -13,6 +13,19 @@ enum UpdateState {
   failed,
 }
 
+/// Whether an open update dialog may be closed by the idle timer: only an
+/// untouched offer or a failure, and only while kiosk lock is in place and no
+/// outside screen (installer, permission settings) is in front. Downloads,
+/// verification, a ready APK and a broken kiosk lock keep the dialog open.
+bool updateDialogIdleClosable({
+  required UpdateState state,
+  required bool kioskSecured,
+  required bool externalScreenOpen,
+}) =>
+    kioskSecured &&
+    !externalScreenOpen &&
+    (state == UpdateState.updateAvailable || state == UpdateState.failed);
+
 enum _UpdateKioskState {
   secured,
   releasing,
@@ -52,8 +65,29 @@ class _UpdateDialogState extends State<_UpdateDialog>
   String _currentVersion = '...';
   String? _apkPath;
   _UpdatePrimaryAction _primaryAction = _UpdatePrimaryAction.download;
-  _UpdateKioskState _kioskState = _UpdateKioskState.secured;
-  _UpdateExternalActivity _externalActivity = _UpdateExternalActivity.none;
+  _UpdateKioskState _kioskStateValue = _UpdateKioskState.secured;
+  _UpdateExternalActivity _externalActivityValue = _UpdateExternalActivity.none;
+
+  _UpdateKioskState get _kioskState => _kioskStateValue;
+  set _kioskState(_UpdateKioskState value) {
+    _kioskStateValue = value;
+    _syncIdleFlag();
+  }
+
+  _UpdateExternalActivity get _externalActivity => _externalActivityValue;
+  set _externalActivity(_UpdateExternalActivity value) {
+    _externalActivityValue = value;
+    _syncIdleFlag();
+  }
+
+  void _syncIdleFlag() {
+    GlobalDialogTracker.isUpdateIdleClosable = updateDialogIdleClosable(
+      state: _updateState,
+      kioskSecured: _kioskStateValue == _UpdateKioskState.secured,
+      externalScreenOpen:
+          _externalActivityValue != _UpdateExternalActivity.none,
+    );
+  }
   bool _isHandlingExternalResume = false;
   ApkDownloadCancellationToken? _downloadCancellationToken;
 
@@ -62,6 +96,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     GlobalDialogTracker.isUpdateDialogOpen = true;
+    _syncIdleFlag();
     _CafeKioskScreenState.resetTimer();
     _loadCurrentVersionAndCheckApk();
   }
@@ -71,6 +106,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
     _downloadCancellationToken?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     GlobalDialogTracker.isUpdateDialogOpen = false;
+    GlobalDialogTracker.isUpdateIdleClosable = false;
     GlobalDialogTracker.isUpdateDownloading = false;
     GlobalDialogTracker.isUpdateVerifying = false;
     GlobalDialogTracker.isUpdateReadyToInstall = false;
@@ -459,6 +495,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
           (newState == UpdateState.readyToInstall);
       GlobalDialogTracker.isUpdateOpeningInstaller =
           (newState == UpdateState.openingInstaller);
+      _syncIdleFlag();
     });
     _CafeKioskScreenState.resetTimer();
   }

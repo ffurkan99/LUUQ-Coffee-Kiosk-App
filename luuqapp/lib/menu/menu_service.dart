@@ -249,15 +249,19 @@ class MenuService {
     catalog = await _materializeImages(catalog, scopeKey);
     if (requestEpoch != _scopeEpoch) return;
     await _cache.writeActive(scopeKey, catalog);
-    // The kiosk may still show the previous catalog (a new one is held back
-    // during a spin or an admin session), so its images stay until the next
-    // sync replaces it.
+    // The kiosk may still show an older catalog (a new one is held back
+    // while a customer or admin dialog is open, possibly over several syncs),
+    // so the previous one and the one on screen keep their images.
     final previous = catalogNotifier.value;
     catalogNotifier.value = catalog;
     unawaited(_cache.pruneOtherScopes(scopeKey));
     unawaited(
       _cache.pruneImages(scopeKey, {
-        for (final item in [...catalog.items, ...?previous?.items]) ...[
+        for (final item in [
+          ...catalog.items,
+          ...?previous?.items,
+          ...?_displayedCatalog?.items,
+        ]) ...[
           if (item.localImagePath != null) item.localImagePath!,
           if (item.localTransparentImagePath != null)
             item.localTransparentImagePath!,
@@ -265,6 +269,12 @@ class MenuService {
       }),
     );
   }
+
+  MenuCatalog? _displayedCatalog;
+
+  /// The kiosk reports which catalog it shows (null: the bundled menu), so
+  /// image cleanup never removes files that are still on screen.
+  void markDisplayed(MenuCatalog? catalog) => _displayedCatalog = catalog;
 
   Future<http.Response> _postMenu(Map<String, dynamic> body) => http
       .post(

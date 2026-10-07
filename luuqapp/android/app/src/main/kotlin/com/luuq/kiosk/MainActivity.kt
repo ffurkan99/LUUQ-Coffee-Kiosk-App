@@ -62,16 +62,26 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // A missing or compressed sound asset must not crash the app on
+        // launch: the ids stay 0 and playback below skips them.
         val flutterLoader = FlutterInjector.instance().flutterLoader()
-        val assetKey = flutterLoader
-            .getLookupKeyForAsset("assets/sounds/wheel_tick.wav")
-        assets.openFd(assetKey).use { descriptor ->
-            tickSoundId = soundPool?.load(descriptor, 1) ?: 0
+        try {
+            val assetKey = flutterLoader
+                .getLookupKeyForAsset("assets/sounds/wheel_tick.wav")
+            assets.openFd(assetKey).use { descriptor ->
+                tickSoundId = soundPool?.load(descriptor, 1) ?: 0
+            }
+        } catch (e: Exception) {
+            Log.w("LuuqSound", "wheel tick sound not loaded", e)
         }
-        val resultSoundIdFd = flutterLoader
-            .getLookupKeyForAsset("assets/sounds/result_chime.wav")
-        assets.openFd(resultSoundIdFd).use { descriptor ->
-            resultSoundId = soundPool?.load(descriptor, 1) ?: 0
+        try {
+            val resultSoundIdFd = flutterLoader
+                .getLookupKeyForAsset("assets/sounds/result_chime.wav")
+            assets.openFd(resultSoundIdFd).use { descriptor ->
+                resultSoundId = soundPool?.load(descriptor, 1) ?: 0
+            }
+        } catch (e: Exception) {
+            Log.w("LuuqSound", "result sound not loaded", e)
         }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)

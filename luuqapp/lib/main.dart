@@ -159,6 +159,10 @@ bool isVideoReadyForRender(
 
 class GlobalDialogTracker {
   static bool isUpdateDialogOpen = false;
+
+  /// The open update dialog is an untouched offer or a failure with kiosk
+  /// lock in place: the idle timer may close it (see updateDialogIdleClosable).
+  static bool isUpdateIdleClosable = false;
   static bool isUpdateDownloading = false;
   static bool isUpdateVerifying = false;
   static bool isUpdateReadyToInstall = false;
@@ -174,11 +178,18 @@ class GlobalDialogTracker {
   /// (60 s) before it closes the dialog and returns to the idle screen.
   static bool isCustomerDialogOpen = false;
 
+  /// A new menu from the panel waits while someone is using the screen: an
+  /// admin session, an update dialog or a customer dialog (the selected
+  /// category could vanish under the customer). It is applied when the
+  /// dialog closes; this is the one exception to "panel changes in 30 s".
   static bool shouldDeferMenuChanges() =>
-      shouldPauseIdleTimer() || isAdminSessionOpen;
+      shouldPauseIdleTimer() ||
+      isAdminSessionOpen ||
+      isCustomerDialogOpen ||
+      isUpdateDialogOpen;
 
   static bool shouldPauseIdleTimer() {
-    return isUpdateDialogOpen ||
+    return (isUpdateDialogOpen && !isUpdateIdleClosable) ||
         isUpdateDownloading ||
         isUpdateVerifying ||
         isUpdateReadyToInstall ||

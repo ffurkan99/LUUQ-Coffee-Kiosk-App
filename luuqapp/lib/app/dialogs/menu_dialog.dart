@@ -64,6 +64,12 @@ class _MenuDialogState extends State<_MenuDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Safety net: if the selected category no longer exists in the menu,
+    // show the first one instead of an empty panel.
+    if (!_currentMenuCategories.containsKey(_selectedCategory) &&
+        _currentMenuCategories.isNotEmpty) {
+      _selectedCategory = _currentMenuCategories.keys.first;
+    }
     final screenW = MediaQuery.of(context).size.width;
     final screenH = MediaQuery.of(context).size.height;
     final items = _filteredItems;

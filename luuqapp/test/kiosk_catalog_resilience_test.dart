@@ -144,6 +144,42 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('a new menu waits while a customer dialog is open', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    addTearDown(() => GlobalDialogTracker.isCustomerDialogOpen = false);
+    await _pumpKiosk(tester);
+    await _setCatalog(
+      tester,
+      _catalog({
+        'local_cafe_rounded': ['Latte'],
+        'cake_rounded': ['Brownie'],
+      }),
+    );
+    expect(debugKioskBaristaNames().dessert, 'Brownie');
+
+    // The customer is browsing the menu when the panel changes it.
+    GlobalDialogTracker.isCustomerDialogOpen = true;
+    await _setCatalog(
+      tester,
+      _catalog({
+        'local_cafe_rounded': ['Latte'],
+        'cake_rounded': ['Cheesecake'],
+      }, revision: 2),
+    );
+    expect(debugKioskBaristaNames().dessert, 'Brownie');
+
+    // Closing the dialog (any tap resets the idle timer) applies it.
+    GlobalDialogTracker.isCustomerDialogOpen = false;
+    await tester.tapAt(const Offset(960, 540));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(debugKioskBaristaNames().dessert, 'Cheesecake');
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('Milkshake is a drink and ice cream is a dessert', (
     tester,
   ) async {

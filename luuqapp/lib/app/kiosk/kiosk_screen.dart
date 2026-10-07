@@ -92,8 +92,11 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
   // AFK background video
   VideoPlayerController? _videoController;
-  final Set<VideoPlayerController> _disposedVideoControllers =
-      <VideoPlayerController>{};
+  // Marks controllers already disposed without keeping them alive (a Set grew
+  // by one controller per failed video retry, for months on a 24/7 kiosk).
+  final Expando<bool> _disposedVideoControllers = Expando<bool>(
+    'disposedVideoController',
+  );
   int _videoInitGeneration = 0;
   bool _videoUnavailable = false;
 
@@ -142,7 +145,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     }
     final idleTimeout = GlobalDialogTracker.isAdminSessionOpen
         ? const Duration(seconds: 90)
-        : GlobalDialogTracker.isCustomerDialogOpen
+        : GlobalDialogTracker.isCustomerDialogOpen ||
+              GlobalDialogTracker.isUpdateDialogOpen
         ? const Duration(seconds: 60)
         : const Duration(seconds: 15);
     _idleTimer = Timer(idleTimeout, () {
@@ -250,6 +254,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   /// moved to a profile with no cached catalog: drop the previous profile's
   /// remote catalog and resolve the wheel/barista against the bundled menu.
   void _restoreBundledMenu() {
+    MenuService.instance.markDisplayed(null);
     _activeMenuCategories = <String, List<_MenuItem>>{};
     _activeMenuCategoryIcons.clear();
     _activeMenuCategoryDescriptions.clear();
@@ -289,6 +294,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   }
 
   void _applyRemoteCatalogToScreen(MenuCatalog catalog) {
+    MenuService.instance.markDisplayed(catalog);
     _applyRemoteMenuCatalog(catalog);
     // A local wheel/barista change still queued for the server must not be
     // overwritten by the (older) server value.
@@ -483,7 +489,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   }
 
   void _disposeVideoController(VideoPlayerController controller) {
-    if (!_disposedVideoControllers.add(controller)) return;
+    if (_disposedVideoControllers[controller] == true) return;
+    _disposedVideoControllers[controller] = true;
     controller.removeListener(_handleVideoValueChanged);
     unawaited(_disposeVideoControllerSafely(controller));
   }
@@ -1611,6 +1618,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
               barrierDismissible: false,
               builder: (_) => const _CleaningModeDialog(),
             );
+            // A license redirect may have replaced this screen meanwhile.
+            if (!mounted) return;
             setState(() {
               _isInCleaningMode = false;
             });
