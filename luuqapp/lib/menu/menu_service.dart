@@ -63,6 +63,17 @@ class MenuService {
   /// reach the server after a newer one for the same domain.
   Future<void> _sendChain = Future<void>.value();
 
+  /// Read-modify-writes of the pending file run one at a time. Queuing a new
+  /// change runs outside [_sendChain], so without this an older send dropping
+  /// its entry could write back a stale copy and erase the newer change.
+  Future<void> _pendingWrites = Future<void>.value();
+
+  Future<T> _updatePending<T>(Future<T> Function() update) {
+    final run = _pendingWrites.then((_) => update());
+    _pendingWrites = run.then((_) {}, onError: (_) {});
+    return run;
+  }
+
   /// A queued change older than this is dropped unsent: the server's value
   /// (possibly changed from the panel since) wins again.
   static const Duration pendingConfigMaxAge = Duration(hours: 24);
@@ -409,14 +420,16 @@ class MenuService {
     if (!scopeKey.startsWith('profile:')) return MenuPushResult.localOnly;
     await _ensureCacheLoaded(scopeKey);
 
-    final pending = await _cache.readPendingConfig(scopeKey);
-    pending[domain] = {
-      'values': values,
-      'idempotency_key': _uuid.v4(),
-      'queued_at': now().toUtc().toIso8601String(),
-    };
-    await _cache.writePendingConfig(scopeKey, pending);
-    if (_loadedScopeKey == scopeKey) _pendingDomains.add(domain);
+    await _updatePending(() async {
+      final pending = await _cache.readPendingConfig(scopeKey);
+      pending[domain] = {
+        'values': values,
+        'idempotency_key': _uuid.v4(),
+        'queued_at': now().toUtc().toIso8601String(),
+      };
+      await _cache.writePendingConfig(scopeKey, pending);
+      if (_loadedScopeKey == scopeKey) _pendingDomains.add(domain);
+    });
 
     final result = await _sendPending(scopeKey, domain);
     if (result == MenuPushResult.saved || result == MenuPushResult.rejected) {
@@ -457,7 +470,7 @@ class MenuService {
         : <String, dynamic>{};
     final idempotencyKey = entry['idempotency_key']?.toString() ?? '';
 
-    Future<void> drop() async {
+    Future<void> drop() => _updatePending(() async {
       final latest = await _cache.readPendingConfig(scopeKey);
       // Only drop the entry we sent; a newer change may have replaced it.
       if (latest[domain]?['idempotency_key']?.toString() == idempotencyKey) {
@@ -465,7 +478,7 @@ class MenuService {
         await _cache.writePendingConfig(scopeKey, latest);
         if (_loadedScopeKey == scopeKey) _pendingDomains.remove(domain);
       }
-    }
+    });
 
     final queuedAt = DateTime.tryParse(entry['queued_at']?.toString() ?? '');
     if (queuedAt == null || now().difference(queuedAt) > pendingConfigMaxAge) {

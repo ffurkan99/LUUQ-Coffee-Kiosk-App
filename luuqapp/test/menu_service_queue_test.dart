@@ -224,6 +224,10 @@ void main() {
 
   test('sends run one at a time and a newer change is sent after the older',
       () async {
+    // Watches the queue through recorded writes: reading the file while the
+    // service replaces it fails on Windows (rename over an open file).
+    final gated = _GatedCache(rootDirectory: directory);
+    service = MenuService.forTest(cache: gated);
     final firstResponse = Completer<void>();
     var inFlight = 0;
     var maxInFlight = 0;
@@ -255,14 +259,12 @@ void main() {
       await until(() => configBodies.length == 1);
       final newest = service.pushLocalWheel(newer);
       // The newer change is queued (replacing the older entry) but not sent.
-      String? queuedIds;
-      await until(() {
-        unawaited(pending().then(
-          (p) => queuedIds = p['wheel']?['values']?['wheel_item_ids']
-              ?.toString(),
-        ));
-        return queuedIds == newer.toString();
-      });
+      await until(
+        () => gated.writes.isNotEmpty &&
+            gated.writes.last['wheel']?['values']?['wheel_item_ids']
+                    ?.toString() ==
+                newer.toString(),
+      );
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(configBodies, hasLength(1),
           reason: 'the newer send waits for the older one');
@@ -275,4 +277,82 @@ void main() {
     expect(configBodies.last['wheel_item_ids'], newer);
     expect(await pending(), isEmpty);
   });
+
+  test('a change queued while the older send is finishing is not lost',
+      () async {
+    final gated = _GatedCache(rootDirectory: directory);
+    service = MenuService.forTest(cache: gated);
+    final mock = MockClient((request) async {
+      if (request.url.toString() == LicenseConfig.menuConfigUrl) {
+        configBodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+        // The next pending read is the older send dropping its own entry.
+        if (configBodies.length == 1) gated.holdNextRead = true;
+        return http.Response('{"active":true}', 200);
+      }
+      if (request.url.toString() == LicenseConfig.menuUrl) {
+        return http.Response(jsonEncode(_catalogResponse()), 200);
+      }
+      return http.Response('{}', 404);
+    });
+    final newer = List.generate(8, (i) => 'n$i');
+    bool newerQueued() => gated.writes.any(
+          (w) =>
+              w['wheel']?['values']?['wheel_item_ids']?.toString() ==
+              newer.toString(),
+        );
+    await http.runWithClient(() async {
+      final older = service.pushLocalWheel(wheel);
+      await gated.held.future;
+      final newest = service.pushLocalWheel(newer);
+      // Let the newer change reach the queue if nothing holds it back.
+      for (var i = 0; i < 10 && !newerQueued(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      gated.release.complete();
+      expect(await older, MenuPushResult.saved);
+      expect(await newest, MenuPushResult.saved);
+    }, () => mock);
+    expect(
+      configBodies.map((b) => b['wheel_item_ids']).toList(),
+      [wheel, newer],
+      reason: 'the newer change must still be sent',
+    );
+    expect(await gated.readPendingConfig('profile:$_profileId'), isEmpty);
+  });
+}
+
+/// Records pending-config writes and can hold one read open after it has
+/// read the file, so a test can interleave a newer change with an in-flight
+/// send at an exact point.
+class _GatedCache extends MenuCache {
+  _GatedCache({required super.rootDirectory});
+
+  final writes = <Map<String, Map<String, dynamic>>>[];
+  final held = Completer<void>();
+  final release = Completer<void>();
+  bool holdNextRead = false;
+
+  @override
+  Future<Map<String, Map<String, dynamic>>> readPendingConfig(
+    String scopeKey,
+  ) async {
+    final result = await super.readPendingConfig(scopeKey);
+    if (holdNextRead) {
+      holdNextRead = false;
+      held.complete();
+      await release.future;
+    }
+    return result;
+  }
+
+  @override
+  Future<void> writePendingConfig(
+    String scopeKey,
+    Map<String, Map<String, dynamic>> pending,
+  ) async {
+    await super.writePendingConfig(scopeKey, pending);
+    writes.add({
+      for (final entry in pending.entries) entry.key: Map.of(entry.value),
+    });
+  }
 }
