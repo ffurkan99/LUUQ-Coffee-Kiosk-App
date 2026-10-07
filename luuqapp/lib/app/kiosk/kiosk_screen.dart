@@ -60,7 +60,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   bool _isLoading = true;
   double _loadingProgress = 0.0;
   bool _isAppActive = true;
-  String _loadingStatus = 'Sistem yükleniyor...';
+  String _loadingStatus = tr('Sistem yükleniyor...', 'System loading...');
 
   // Idle state handling
   Timer? _idleTimer;
@@ -683,10 +683,16 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     // background, so a large asset catalog cannot hold the kiosk on its
     // loading screen.
     final criticalProviders = <ImageProvider>{
-      const AssetImage('assets/logo.png'),
-      const AssetImage('assets/instagramqr.png'),
-      const AssetImage('assets/mapsqr.png'),
-      const AssetImage('assets/wifiqr.png'),
+      ResizeImage(
+        const AssetImage('assets/logo.png'),
+        width: _logoCacheWidth,
+      ),
+      for (final qr in const [
+        'assets/instagramqr.png',
+        'assets/mapsqr.png',
+        'assets/wifiqr.png',
+      ])
+        ResizeImage(AssetImage(qr), width: _qrCacheWidth),
     };
 
     Set<String> assetKeys = {};
@@ -1189,6 +1195,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                       Positioned.fill(
                                                         child: Image.asset(
                                                           'assets/logo.png',
+                                                          cacheWidth:
+                                                              _logoCacheWidth,
                                                           fit: BoxFit.contain,
                                                           errorBuilder: (context, error, stackTrace) {
                                                             return Container(
@@ -1584,9 +1592,12 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                 tr('Ekran Temizleme Modu', 'Screen Cleaning Mode'),
                 style: TextStyle(color: _cream),
               ),
-              content: const Text(
-                'Ekran temizleme modunu başlatmak istediğinize emin misiniz? 30 saniye boyunca dokunmatik kilitlenecektir.',
-                style: TextStyle(color: _mutedText),
+              content: Text(
+                tr(
+                  'Ekran temizleme modunu başlatmak istediğinize emin misiniz? 30 saniye boyunca dokunmatik kilitlenecektir.',
+                  'Start screen cleaning mode? The touchscreen will be locked for 30 seconds.',
+                ),
+                style: const TextStyle(color: _mutedText),
               ),
               actions: [
                 TextButton(
@@ -1598,9 +1609,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text(
-                    'Evet, Başlat',
-                    style: TextStyle(color: Colors.lightBlueAccent),
+                  child: Text(
+                    tr('Evet, Başlat', 'Yes, Start'),
+                    style: const TextStyle(color: Colors.lightBlueAccent),
                   ),
                 ),
               ],
@@ -1674,9 +1685,12 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                 tr('Uygulamadan Çık', 'Exit App'),
                 style: TextStyle(color: _cream),
               ),
-              content: const Text(
-                'Kiosk uygulamasını kapatıp masaüstüne dönmek istediğinize emin misiniz?',
-                style: TextStyle(color: _mutedText),
+              content: Text(
+                tr(
+                  'Kiosk uygulamasını kapatıp masaüstüne dönmek istediğinize emin misiniz?',
+                  'Close the kiosk app and return to the home screen?',
+                ),
+                style: const TextStyle(color: _mutedText),
               ),
               actions: [
                 TextButton(

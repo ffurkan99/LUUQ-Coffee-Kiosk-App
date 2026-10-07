@@ -20,10 +20,12 @@ class _LuuqAnalytics {
       final file = await _resolvedFile();
       if (await file.exists()) {
         final content = await file.readAsString();
-        final data = json.decode(content) as Map<String, dynamic>;
-        menuClicks = data['menuClicks'] ?? 0;
-        wheelSpins = data['wheelSpins'] ?? 0;
-        whoPaysPlays = data['whoPaysPlays'] ?? 0;
+        final data = json.decode(content);
+        if (data is! Map) return;
+        int count(Object? value) => value is num ? value.toInt() : 0;
+        menuClicks = count(data['menuClicks']);
+        wheelSpins = count(data['wheelSpins']);
+        whoPaysPlays = count(data['whoPaysPlays']);
       }
     } catch (e) {
       // ignore

@@ -549,7 +549,9 @@ class _UpdateDialogState extends State<_UpdateDialog>
     try {
       final apkUrl = widget.licenseStatus.apkUrl;
       if (apkUrl == null || !apkUrl.startsWith('https://')) {
-        throw const HttpException('Güvenli bağlantı (HTTPS) hatası.');
+        throw HttpException(
+          tr('Güvenli bağlantı (HTTPS) hatası.', 'Secure connection (HTTPS) error.'),
+        );
       }
 
       final File file = await UpdateService.downloadApk(apkUrl, (progress) {

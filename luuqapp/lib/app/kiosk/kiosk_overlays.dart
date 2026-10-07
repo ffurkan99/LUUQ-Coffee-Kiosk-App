@@ -124,6 +124,7 @@ extension _KioskOverlays on _CafeKioskScreenState {
                 'assets/logo.png',
                 width: 250,
                 height: 250,
+                cacheWidth: _logoCacheWidth,
                 fit: BoxFit.contain,
                 errorBuilder: (c, e, s) => const Icon(
                   Icons.restaurant_menu_rounded,
@@ -402,6 +403,7 @@ extension _KioskOverlays on _CafeKioskScreenState {
             assetPath,
             width: size,
             height: size,
+            cacheWidth: _qrCacheWidth,
             fit: BoxFit.cover,
           ),
         ),

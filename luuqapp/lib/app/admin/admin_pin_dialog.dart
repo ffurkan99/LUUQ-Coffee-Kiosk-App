@@ -78,7 +78,9 @@ class _AdminPinDialogState extends State<_AdminPinDialog> {
           data = decoded;
         }
       } catch (e) {
-        debugPrint('verifyAdminPin JSON decode error: $e. Body raw: $bodyStr');
+        if (kDebugMode) {
+          debugPrint('verifyAdminPin JSON decode error: $e. Body: $bodyStr');
+        }
       }
 
       if (data != null) {

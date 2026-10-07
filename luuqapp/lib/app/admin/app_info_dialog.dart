@@ -39,7 +39,11 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
 
   Future<void> _loadDiagnosticInfo() async {
     final deviceId = await DeviceIdentityService.getDeviceId();
-    final isConnected = await _checkInternet();
+    // The same signal as the "no connection" cover: the license server's
+    // answers, not a lookup of a third-party host.
+    final sync = FeatureSyncService.instance;
+    final isConnected = !sync.connectionLost.value;
+    final lastCheck = sync.lastSuccessfulCheck;
     final appVersion = await DeviceIdentityService.getAppVersion(
       bypassCache: true,
     );
@@ -48,23 +52,12 @@ class _AppInfoDialogState extends State<_AppInfoDialog> {
       setState(() {
         _deviceId = deviceId;
         _appVersion = appVersion;
-        _internetStatus = isConnected
-            ? tr('Bağlı (İnternet Var)', 'Connected (Online)')
-            : tr('Bağlantı Yok (Çevrimdışı)', 'No Connection (Offline)');
+        _internetStatus =
+            '${isConnected ? tr('Bağlı', 'Connected') : tr('Bağlantı Yok', 'No Connection')}'
+            ' · ${tr('Son kontrol', 'Last check')}: ${_formatDateTime(lastCheck)}';
         _internetColor = isConnected ? Colors.greenAccent : Colors.redAccent;
       });
     }
-  }
-
-  Future<bool> _checkInternet() async {
-    try {
-      final result = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 2));
-      if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) {
-        return true;
-      }
-    } catch (_) {}
-    return false;
   }
 
   String _formatUptime(Duration duration) {

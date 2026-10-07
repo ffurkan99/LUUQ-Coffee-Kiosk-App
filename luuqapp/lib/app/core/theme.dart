@@ -1,5 +1,10 @@
 part of '../../main.dart';
 
+/// Decode widths for the logo (shown up to ~700 px) and the QR codes (shown
+/// up to 500 px); the sources are 1759 px and 1024 px.
+const int _logoCacheWidth = 1024;
+const int _qrCacheWidth = 512;
+
 const _bgDark = Color(0xFF16131D); // Deep dark warm navy/brown
 const _surface = Color(0xFF231E2D);
 const _gold = Color(0xFFF9AB3E);

@@ -53,18 +53,22 @@ class _LuuqSettings {
           );
         }
 
-        volume = (jsonMap['volume'] as num?)?.toDouble() ?? 1.0;
-        baristaDrink = jsonMap['baristaDrink'] as String?;
-        baristaDessert = jsonMap['baristaDessert'] as String?;
-        baristaDrinkId = jsonMap['baristaDrinkId'] as String?;
-        baristaDessertId = jsonMap['baristaDessertId'] as String?;
+        // Each field is read on its own, so one value of the wrong type does
+        // not throw away the whole file (and fail later in the kiosk screen).
+        String? text(Object? value) => value is String ? value : null;
+        List<String>? strings(Object? value) =>
+            value is List ? value.whereType<String>().toList() : null;
+        final volumeValue = jsonMap['volume'];
+        volume = volumeValue is num ? volumeValue.toDouble() : 1.0;
+        baristaDrink = text(jsonMap['baristaDrink']);
+        baristaDessert = text(jsonMap['baristaDessert']);
+        baristaDrinkId = text(jsonMap['baristaDrinkId']);
+        baristaDessertId = text(jsonMap['baristaDessertId']);
 
-        final list = jsonMap['wheelItems'] as List<dynamic>?;
-        if (list != null) {
-          wheelItems = list.cast<String>();
-        }
-        final ids = jsonMap['wheelItemIds'] as List<dynamic>?;
-        if (ids != null) wheelItemIds = ids.cast<String>();
+        final list = strings(jsonMap['wheelItems']);
+        if (list != null) wheelItems = list;
+        final ids = strings(jsonMap['wheelItemIds']);
+        if (ids != null) wheelItemIds = ids;
       }
     } catch (_) {}
   }
