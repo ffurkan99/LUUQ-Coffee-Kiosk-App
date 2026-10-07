@@ -692,10 +692,10 @@ class _MenuDialogState extends State<_MenuDialog> {
       item.name,
       _selectedCategory,
     );
-    showDialog(
-      context: context,
-      builder: (context) =>
-          _VirtualCanvasDialogWrapper(child: _ProductDetailDialog(item: item)),
+    _showKioskDialog<void>(
+      context,
+      _ProductDetailDialog(item: item),
+      label: _menuItemName(item),
     );
   }
 

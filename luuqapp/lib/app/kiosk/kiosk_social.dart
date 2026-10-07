@@ -207,46 +207,11 @@ extension _KioskSocial on _CafeKioskScreenState {
     String label, {
     bool barrierDismissible = true,
   }) {
-    return showGeneralDialog(
-      context: context,
+    return _showKioskDialog<void>(
+      context,
+      dialogWidget,
+      label: label,
       barrierDismissible: barrierDismissible,
-      barrierLabel: label,
-      barrierColor: Colors.black.withValues(alpha: 0.40),
-      transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder: (context, anim1, anim2) {
-        return Scaffold(
-          backgroundColor: Colors.transparent,
-          body: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: barrierDismissible
-                ? () {
-                    Navigator.of(context).pop();
-                  }
-                : null,
-            child: _VirtualCanvasDialogWrapper(
-              child: GestureDetector(
-                onTap: () {}, // Prevent taps inside the dialog from closing it
-                child: dialogWidget,
-              ),
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (context, anim1, anim2, child) {
-        return FadeTransition(
-          opacity: anim1,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.9, end: 1.0).animate(
-              CurvedAnimation(
-                parent: anim1,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeIn,
-              ),
-            ),
-            child: child,
-          ),
-        );
-      },
     );
   }
 

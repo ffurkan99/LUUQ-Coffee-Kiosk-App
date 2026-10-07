@@ -78,10 +78,10 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       showFeatureLockedDialog(context, tr('Ürün Detayı', 'Product Detail'));
       return;
     }
-    showDialog(
-      context: context,
-      builder: (context) =>
-          _VirtualCanvasDialogWrapper(child: _ProductDetailDialog(item: item)),
+    _showKioskDialog<void>(
+      context,
+      _ProductDetailDialog(item: item),
+      label: _menuItemName(item),
     );
   }
 
