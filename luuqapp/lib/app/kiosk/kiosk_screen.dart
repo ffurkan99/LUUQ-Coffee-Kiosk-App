@@ -1,5 +1,23 @@
 part of '../../main.dart';
 
+/// Test hook: names of the wheel items the visible kiosk shows.
+@visibleForTesting
+List<String> debugKioskWheelItemNames() =>
+    _CafeKioskScreenState.activeInstance?._wheelMenuItems
+        .map((item) => item.name)
+        .toList(growable: false) ??
+    const [];
+
+/// Test hook: the barista drink/dessert the visible kiosk recommends.
+@visibleForTesting
+({String? drink, String? dessert}) debugKioskBaristaNames() {
+  final state = _CafeKioskScreenState.activeInstance;
+  return (
+    drink: state?._currentBaristaDrink?.name,
+    dessert: state?._currentBaristaDessert?.name,
+  );
+}
+
 class CafeKioskScreen extends StatefulWidget {
   const CafeKioskScreen({super.key});
 
@@ -253,7 +271,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     setState(() {
       _wheelMenuItems = bundledWheel.length == 8
           ? bundledWheel
-          : _defaultWheelMenuItems();
+          : _defaultWheelMenuItems(keep: bundledWheel);
       _baristaDrink = drink;
       _baristaDessert = dessert;
       _selectedDrink = null;
@@ -330,11 +348,41 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     unawaited(_LuuqSettings.instance.save());
     if (mounted) {
       setState(() {
-        if (migratedWheel.length == 8) _wheelMenuItems = migratedWheel;
-        if (migratedDrink != null) _baristaDrink = migratedDrink;
-        if (migratedDessert != null) _baristaDessert = migratedDessert;
+        // Without a full configured wheel, keep the current items that still
+        // exist in this menu (as the new objects, with current prices and
+        // photos), drop removed ones and fill up from the default picks.
+        if (migratedWheel.length == 8) {
+          _wheelMenuItems = migratedWheel;
+        } else {
+          final kept = _wheelMenuItems
+              .map(_resolveInCurrentMenu)
+              .whereType<_MenuItem>()
+              .toList(growable: false);
+          _wheelMenuItems = kept.length == 8
+              ? kept
+              : _defaultWheelMenuItems(keep: kept);
+        }
+        // A barista pick removed from the menu falls back to the default
+        // recommendation (null here) instead of advertising a deleted item.
+        _baristaDrink =
+            migratedDrink ??
+            (_baristaDrink == null
+                ? null
+                : _resolveInCurrentMenu(_baristaDrink!));
+        _baristaDessert =
+            migratedDessert ??
+            (_baristaDessert == null
+                ? null
+                : _resolveInCurrentMenu(_baristaDessert!));
       });
     }
+  }
+
+  /// [item] as it exists in the current menu (by id, else by name), or null.
+  _MenuItem? _resolveInCurrentMenu(_MenuItem item) {
+    final id = item.id;
+    return (id == null ? null : _findMenuItemById(id)) ??
+        _findMenuItemByName(item.name);
   }
 
   @override
@@ -1394,6 +1442,20 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         }
 
         if (adminSection == _AdminSection.barista) {
+          final currentDrink = _currentBaristaDrink;
+          final currentDessert = _currentBaristaDessert;
+          if (currentDrink == null || currentDessert == null) {
+            await _showAdminError(
+              // ignore: use_build_context_synchronously
+              context,
+              tr(
+                'Menüde tavsiye edilecek içecek veya tatlı yok. Önce panelden menüye ekleyin.',
+                'The menu has no drink or dessert to recommend. Add them in the panel first.',
+              ),
+              title: tr('Liste boş', 'Nothing to choose'),
+            );
+            continue;
+          }
           await showDialog<void>(
             // ignore: use_build_context_synchronously
             context: context,
@@ -1402,8 +1464,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
               child: _BaristaAdminDialog(
                 drinkOptions: _recommendationDrinkOptions,
                 dessertOptions: _recommendationDessertOptions,
-                selectedDrink: _currentBaristaDrink,
-                selectedDessert: _currentBaristaDessert,
+                selectedDrink: currentDrink,
+                selectedDessert: currentDessert,
                 blockedItems: _wheelMenuItems,
                 onSave: (drink, dessert) {
                   setState(() {
@@ -1441,6 +1503,18 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
             ),
           );
         } else if (adminSection == _AdminSection.wheel) {
+          if (_wheelMenuItems.length != 8) {
+            await _showAdminError(
+              // ignore: use_build_context_synchronously
+              context,
+              tr(
+                'Menüde çark için yeterli ürün yok (8 gerekli).',
+                'The menu does not have enough items for the wheel (8 needed).',
+              ),
+              title: tr('Liste boş', 'Nothing to choose'),
+            );
+            continue;
+          }
           await showDialog<void>(
             // ignore: use_build_context_synchronously
             context: context,
@@ -1454,7 +1528,10 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                 cocktailOptions: _cocktailOptions,
                 herbalTeaOptions: _herbalTeaOptions,
                 iceCreamOptions: _iceCreamOptions,
-                blockedItems: [_currentBaristaDrink, _currentBaristaDessert],
+                blockedItems: [
+                  _currentBaristaDrink,
+                  _currentBaristaDessert,
+                ].whereType<_MenuItem>().toList(growable: false),
                 onSave: (items) {
                   setState(() {
                     _wheelMenuItems = items;

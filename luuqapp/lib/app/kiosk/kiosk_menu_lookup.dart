@@ -22,56 +22,44 @@ extension _KioskMenuLookup on _CafeKioskScreenState {
     return null;
   }
 
+  // Desserts and drinks are told apart by category icon, for the server menu
+  // and the bundled one alike: cakes, cookies and ice creams (outlined) are
+  // desserts; Milkshake (rounded ice cream) is a drink. Extras, merchandise
+  // and sandwiches are neither.
+  static final _dessertIcons = <IconData>{
+    Icons.cake_rounded,
+    Icons.cookie_rounded,
+    Icons.icecream_outlined,
+  };
+  static final _notRecommendedIcons = <IconData>{
+    Icons.add_circle_outline_rounded,
+    Icons.coffee_rounded,
+    Icons.lunch_dining_rounded,
+  };
+
+  Map<String, IconData> get _recommendationIconMap =>
+      _activeMenuCategoryIcons.isNotEmpty
+      ? _activeMenuCategoryIcons
+      : _categoryIcons;
+
   List<_MenuItem> get _recommendationDrinkOptions {
-    if (_activeMenuCategoryIcons.isNotEmpty) {
-      final excluded = <IconData>{
-        Icons.cake_rounded,
-        Icons.cookie_rounded,
-        Icons.icecream_rounded,
-        Icons.icecream_outlined,
-        Icons.add_circle_outline_rounded,
-        Icons.coffee_rounded,
-        Icons.lunch_dining_rounded,
-      };
-      return _currentMenuCategories.entries
-          .where(
-            (entry) => !excluded.contains(_activeMenuCategoryIcons[entry.key]),
-          )
-          .expand((entry) => entry.value)
-          .toList(growable: false);
-    }
-    const dessertCategories = {'Pasta & Tatlı', 'LUUQ Chocolate'};
-    const hiddenCategories = {'Ekstralar', 'Termos & Seramik', 'Sandviç'};
+    final icons = _recommendationIconMap;
     return _currentMenuCategories.entries
-        .where(
-          (entry) =>
-              !dessertCategories.contains(entry.key) &&
-              !hiddenCategories.contains(entry.key),
-        )
+        .where((entry) {
+          final icon = icons[entry.key];
+          return !_dessertIcons.contains(icon) &&
+              !_notRecommendedIcons.contains(icon);
+        })
         .expand((entry) => entry.value)
         .toList(growable: false);
   }
 
   List<_MenuItem> get _recommendationDessertOptions {
-    if (_activeMenuCategoryIcons.isNotEmpty) {
-      final dessertIcons = <IconData>{
-        Icons.cake_rounded,
-        Icons.cookie_rounded,
-        Icons.icecream_rounded,
-        Icons.icecream_outlined,
-      };
-      return _currentMenuCategories.entries
-          .where(
-            (entry) =>
-                dessertIcons.contains(_activeMenuCategoryIcons[entry.key]),
-          )
-          .expand((entry) => entry.value)
-          .toList(growable: false);
-    }
-    return [
-      ...?_currentMenuCategories['Pasta & Tatlı'],
-      ...?_currentMenuCategories['LUUQ Chocolate'],
-    ];
+    final icons = _recommendationIconMap;
+    return _currentMenuCategories.entries
+        .where((entry) => _dessertIcons.contains(icons[entry.key]))
+        .expand((entry) => entry.value)
+        .toList(growable: false);
   }
 
   List<_MenuItem> get _iceCoffeeOptions => _itemsForCategoryIcons([
@@ -94,12 +82,9 @@ extension _KioskMenuLookup on _CafeKioskScreenState {
   List<_MenuItem> get _herbalTeaOptions =>
       _itemsForCategoryIcons([Icons.eco_rounded]);
 
-  List<_MenuItem> get _iceCreamOptions => _activeMenuCategoryIcons.isNotEmpty
-      ? _itemsForCategoryIcons([
-          Icons.icecream_outlined,
-          Icons.icecream_rounded,
-        ])
-      : (_currentMenuCategories['Dondurmalar'] ?? const []);
+  // Ice creams only; Milkshake is a drink (same rule as the default wheel).
+  List<_MenuItem> get _iceCreamOptions =>
+      _itemsForCategoryIcons([Icons.icecream_outlined]);
 
   List<_MenuItem> _itemsForCategoryIcons(List<IconData> icons) {
     final items = <_MenuItem>[];
@@ -116,22 +101,19 @@ extension _KioskMenuLookup on _CafeKioskScreenState {
 
   // Varsayılan öneri: admin hiç seçim yapmadıysa fotoğrafı olan ilk ürün.
   // (Fotoğrafsız varsayılan, en görünür karta boş ikon kutusu koyuyordu.)
-  _MenuItem get _currentBaristaDrink {
-    final options = _recommendationDrinkOptions;
-    return _baristaDrink ??
-        options.firstWhere(
-          (item) => item.imagePath != null,
-          orElse: () => options.first,
-        );
-  }
+  // Null when the menu has nothing to recommend (e.g. no dessert category):
+  // the card then leaves that box out instead of failing to build.
+  _MenuItem? get _currentBaristaDrink =>
+      _baristaDrink ?? _defaultRecommendation(_recommendationDrinkOptions);
 
-  _MenuItem get _currentBaristaDessert {
-    final options = _recommendationDessertOptions;
-    return _baristaDessert ??
-        options.firstWhere(
-          (item) => item.imagePath != null,
-          orElse: () => options.first,
-        );
+  _MenuItem? get _currentBaristaDessert =>
+      _baristaDessert ?? _defaultRecommendation(_recommendationDessertOptions);
+
+  _MenuItem? _defaultRecommendation(List<_MenuItem> options) {
+    for (final item in options) {
+      if (item.imagePath != null) return item;
+    }
+    return options.isEmpty ? null : options.first;
   }
 
   _MenuItem? _menuItemForDrink(Drink drink) {

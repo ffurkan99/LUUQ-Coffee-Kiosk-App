@@ -313,7 +313,11 @@ _MenuItem? _firstContained(
   return null;
 }
 
-Future<void> _showAdminError(BuildContext context, String message) {
+Future<void> _showAdminError(
+  BuildContext context,
+  String message, {
+  String? title,
+}) {
   return showDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -326,7 +330,7 @@ Future<void> _showAdminError(BuildContext context, String message) {
             const Icon(Icons.warning_amber_rounded, color: _gold),
             const SizedBox(width: 10),
             Text(
-              tr('Seçim çakışıyor', 'Selection Conflict'),
+              title ?? tr('Seçim çakışıyor', 'Selection Conflict'),
               style: const TextStyle(
                 color: _cream,
                 fontWeight: FontWeight.w900,

@@ -166,6 +166,8 @@ extension _KioskLayout on _CafeKioskScreenState {
     final isCompact = MediaQuery.sizeOf(context).width < 700;
     final drink = _currentBaristaDrink;
     final dessert = _currentBaristaDessert;
+    // A menu without drinks or desserts to recommend: show only what exists.
+    if (drink == null && dessert == null) return const SizedBox.shrink();
 
     return Container(
       width: double.infinity,
@@ -207,27 +209,30 @@ extension _KioskLayout on _CafeKioskScreenState {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: _buildRecommendationBox(
-                        icon: Icons.local_cafe_rounded,
-                        label: tr('İçecek', 'Drink'),
-                        value: _menuItemName(drink),
-                        imagePath: drink.imagePath,
-                        remoteImageUrl: drink.remoteImageUrl,
-                        onTap: () => _showProductDetailDialog(drink),
+                    if (drink != null)
+                      Expanded(
+                        child: _buildRecommendationBox(
+                          icon: Icons.local_cafe_rounded,
+                          label: tr('İçecek', 'Drink'),
+                          value: _menuItemName(drink),
+                          imagePath: drink.imagePath,
+                          remoteImageUrl: drink.remoteImageUrl,
+                          onTap: () => _showProductDetailDialog(drink),
+                        ),
                       ),
-                    ),
-                    SizedBox(width: isCompact ? 12 : 16),
-                    Expanded(
-                      child: _buildRecommendationBox(
-                        icon: Icons.cake_rounded,
-                        label: tr('Tatlı', 'Dessert'),
-                        value: _menuItemName(dessert),
-                        imagePath: dessert.imagePath,
-                        remoteImageUrl: dessert.remoteImageUrl,
-                        onTap: () => _showProductDetailDialog(dessert),
+                    if (drink != null && dessert != null)
+                      SizedBox(width: isCompact ? 12 : 16),
+                    if (dessert != null)
+                      Expanded(
+                        child: _buildRecommendationBox(
+                          icon: Icons.cake_rounded,
+                          label: tr('Tatlı', 'Dessert'),
+                          value: _menuItemName(dessert),
+                          imagePath: dessert.imagePath,
+                          remoteImageUrl: dessert.remoteImageUrl,
+                          onTap: () => _showProductDetailDialog(dessert),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

@@ -186,7 +186,14 @@ class _PointerPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-List<_MenuItem> _defaultWheelMenuItems() {
+/// The wheel's eight items when nothing is configured. Items in [keep] (still
+/// valid picks from a previous configuration) come first. A sparse menu (for
+/// example no hot coffee category) never throws: the slots are filled from the
+/// other pools without repeats, and a menu with fewer than eight items gives a
+/// shorter list.
+List<_MenuItem> _defaultWheelMenuItems({
+  Iterable<_MenuItem> keep = const [],
+}) {
   final iceCoffee = _expensiveItems(
     _menuItemsForCategoryIcons([
       Icons.ac_unit_rounded,
@@ -214,22 +221,40 @@ List<_MenuItem> _defaultWheelMenuItems() {
   );
   final iceCreams = _menuItemsForCategoryIcons([Icons.icecream_outlined]);
 
-  if (appThemeNotifier.value == AppTheme.summer) {
-    return [
-      ...iceCoffee.take(2),
-      ...desserts.take(2),
-      ...cocktails.take(2),
-      ...iceCreams.take(2),
-    ];
+  final picks = appThemeNotifier.value == AppTheme.summer
+      ? [
+          ...iceCoffee.take(2),
+          ...desserts.take(2),
+          ...cocktails.take(2),
+          ...iceCreams.take(2),
+        ]
+      : [
+          ...iceCoffee.take(1),
+          ...hotCoffee.take(1),
+          ...desserts.take(2),
+          ...cocktails.take(2),
+          ...herbalTeas.take(2),
+        ];
+
+  final result = <_MenuItem>[];
+  final seen = <String>{};
+  void add(_MenuItem item) {
+    if (result.length < 8 && seen.add(item.id ?? item.name)) result.add(item);
   }
 
-  return [
-    iceCoffee.first,
-    hotCoffee.first,
-    ...desserts.take(2),
-    ...cocktails.take(2),
-    ...herbalTeas.take(2),
-  ];
+  keep.forEach(add);
+  picks.forEach(add);
+  for (final pool in [
+    iceCoffee,
+    hotCoffee,
+    desserts,
+    cocktails,
+    herbalTeas,
+    iceCreams,
+  ]) {
+    pool.forEach(add);
+  }
+  return result;
 }
 
 List<_MenuItem> _menuItemsForCategoryIcons(List<IconData> icons) {
