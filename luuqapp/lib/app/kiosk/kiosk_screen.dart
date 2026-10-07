@@ -670,7 +670,10 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       if (path == null) continue;
       final wheelPath = _wheelImagePath(path);
       if (assetKeys.isEmpty || assetKeys.contains(wheelPath)) {
-        providers.add(AssetImage(wheelPath));
+        // Same provider the wheel draws with (cacheWidth: 136); a plain
+        // AssetImage would decode the full-size picture into a cache entry
+        // the wheel never uses.
+        providers.add(ResizeImage(AssetImage(wheelPath), width: 136));
       }
     }
     for (final category in _currentMenuCategories.values) {
