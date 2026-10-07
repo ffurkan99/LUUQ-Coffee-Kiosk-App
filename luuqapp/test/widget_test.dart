@@ -638,6 +638,137 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     _disableLicensedKiosk();
   });
+
+  group('customer dialogs', () {
+    Future<void> openMenu(WidgetTester tester) async {
+      for (
+        var i = 0;
+        i < 60 && find.text('TÜM MENÜYÜ İNCELE').evaluate().isEmpty;
+        i++
+      ) {
+        await tester.tapAt(const Offset(960, 540));
+        await _pumpFrames(tester, const Duration(milliseconds: 100));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+      await tester.tap(find.text('TÜM MENÜYÜ İNCELE'));
+      await _pumpFrames(tester, const Duration(milliseconds: 500));
+      expect(find.byType(Dialog), findsOneWidget);
+    }
+
+    tearDown(_disableLicensedKiosk);
+
+    testWidgets('the menu opens over a blurred scrim and closes outside', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(tester, const Size(1920, 1080));
+      await openMenu(tester);
+      expect(find.byType(BackdropFilter), findsWidgets);
+
+      // A tap inside the menu keeps it open, one outside closes it.
+      await tester.tap(find.text('LUUQ MENÜ'));
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+      expect(find.byType(Dialog), findsOneWidget);
+      await tester.tapAt(const Offset(4, 4));
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+      expect(find.byType(Dialog), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
+
+    testWidgets('a product photo flies into the detail, the X closes it', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(tester, const Size(1920, 1080));
+      await openMenu(tester);
+
+      final cardPhoto = find.descendant(
+        of: find.byType(Dialog),
+        matching: find.byType(Hero),
+      );
+      expect(cardPhoto, findsWidgets);
+      final tag = tester.widget<Hero>(cardPhoto.first).tag;
+      await tester.tap(cardPhoto.first);
+      await _pumpFrames(tester, const Duration(milliseconds: 500));
+
+      // The detail photo carries the tapped card's tag.
+      final sameTag = find.byWidgetPredicate((w) => w is Hero && w.tag == tag);
+      expect(sameTag, findsNWidgets(2));
+      expect(find.byType(Dialog), findsNWidgets(2));
+
+      await tester.tap(find.byIcon(Icons.close_rounded).last);
+      await _pumpFrames(tester, const Duration(milliseconds: 400));
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
+
+    testWidgets('a search without results offers products and categories', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(tester, const Size(1920, 1080));
+      await openMenu(tester);
+
+      await tester.enterText(find.byType(TextField), 'qqqzzz');
+      await _pumpFrames(tester, const Duration(milliseconds: 400));
+      expect(find.text('Sonuç bulunamadı'), findsOneWidget);
+      expect(find.text('Şunlara göz atabilirsiniz:'), findsOneWidget);
+
+      // A category chip clears the search and opens that category.
+      final chip = find.descendant(
+        of: find.byKey(const ValueKey('no_results_qqqzzz')),
+        matching: find.byType(BouncyButton),
+      );
+      expect(chip, findsWidgets);
+      await tester.tap(chip.last);
+      await _pumpFrames(tester, const Duration(milliseconds: 400));
+      expect(find.text('Sonuç bulunamadı'), findsNothing);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
+
+    testWidgets('with animations off a dialog is fully open at once', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(
+        tester,
+        const Size(1920, 1080),
+        disableAnimations: true,
+      );
+      for (
+        var i = 0;
+        i < 60 && find.text('TÜM MENÜYÜ İNCELE').evaluate().isEmpty;
+        i++
+      ) {
+        await tester.tapAt(const Offset(960, 540));
+        await _pumpFrames(tester, const Duration(milliseconds: 100));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+      await tester.tap(find.text('TÜM MENÜYÜ İNCELE'));
+      await tester.pump();
+      await tester.pump();
+      final route = ModalRoute.of(tester.element(find.byType(Dialog)))!;
+      expect(route.animation!.value, 1);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
+  });
 }
 
 Future<void> _pumpKioskAtSize(

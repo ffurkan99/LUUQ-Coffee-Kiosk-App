@@ -258,17 +258,7 @@ class _MenuDialogState extends State<_MenuDialog> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8.0),
                 child: BouncyButton(
-                  onTap: () {
-                    setState(() {
-                      _selectedCategory = category;
-                      _searchQuery = '';
-                      _searchController.clear();
-                    });
-                    if (_itemsScrollController.hasClients) {
-                      _itemsScrollController.jumpTo(0);
-                    }
-                    AnalyticsService.instance.trackCategoryClick(category);
-                  },
+                  onTap: () => _selectCategory(category),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOutQuint,
@@ -474,24 +464,29 @@ class _MenuDialogState extends State<_MenuDialog> {
                 child: child,
               ),
             ),
-            child: GridView.builder(
-              key: ValueKey(
-                _searchQuery.isNotEmpty
-                    ? 'search_$_searchQuery'
-                    : _selectedCategory,
-              ),
-              controller: _itemsScrollController,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 3.5, // More compact cards as requested
-              ),
-              itemCount: items.length,
-              itemBuilder: (context, index) => _buildMenuItemCard(items[index]),
-            ), // end of GridView.builder
+            child: items.isEmpty && _searchQuery.isNotEmpty
+                ? _buildNoResults()
+                : GridView.builder(
+                    key: ValueKey(
+                      _searchQuery.isNotEmpty
+                          ? 'search_$_searchQuery'
+                          : _selectedCategory,
+                    ),
+                    controller: _itemsScrollController,
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio:
+                              3.5, // More compact cards as requested
+                        ),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) =>
+                        _buildMenuItemCard(items[index]),
+                  ), // end of GridView.builder
           ), // end of AnimatedSwitcher
         ), // end of Expanded
       ],
@@ -661,6 +656,114 @@ class _MenuDialogState extends State<_MenuDialog> {
           ),
         ),
       ],
+    );
+  }
+
+  void _selectCategory(String category) {
+    setState(() {
+      _selectedCategory = category;
+      _searchQuery = '';
+      _searchController.clear();
+    });
+    if (_itemsScrollController.hasClients) {
+      _itemsScrollController.jumpTo(0);
+    }
+    AnalyticsService.instance.trackCategoryClick(category);
+  }
+
+  // ═══ NO SEARCH RESULTS ═══
+  /// Instead of an empty grid: popular products and the categories, one tap
+  /// away.
+  Widget _buildNoResults() {
+    final popular = <_MenuItem>[
+      for (final list in _currentMenuCategories.values)
+        for (final item in list)
+          if (item.tags.contains('Popüler')) item,
+    ].take(6);
+    return SingleChildScrollView(
+      key: ValueKey('no_results_$_searchQuery'),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(32, 32, 32, 32),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+            size: 56,
+            color: _gold.withValues(alpha: 0.7),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            tr('Sonuç bulunamadı', 'No results'),
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: _cream,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            tr('Şunlara göz atabilirsiniz:', 'You can browse these:'),
+            style: const TextStyle(fontSize: 16, color: _mutedText),
+          ),
+          const SizedBox(height: 24),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final item in popular)
+                _buildSuggestionChip(
+                  icon: Icons.star_rounded,
+                  label: _menuItemName(item),
+                  onTap: () => _showProductDetailDialog(item),
+                ),
+              for (final category in _currentMenuCategories.keys)
+                _buildSuggestionChip(
+                  icon:
+                      (_activeMenuCategoryIcons.isNotEmpty
+                          ? _activeMenuCategoryIcons[category]
+                          : _categoryIcons[category]) ??
+                      Icons.circle,
+                  label: _menuCategoryName(category),
+                  onTap: () => _selectCategory(category),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionChip({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return BouncyButton(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: _gold),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: _cream,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
