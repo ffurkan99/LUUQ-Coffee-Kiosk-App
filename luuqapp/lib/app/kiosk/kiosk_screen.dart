@@ -73,14 +73,14 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   bool _isInCleaningMode = false;
   final _spinSound = _SpinTickSound();
 
-  void _showProductDetailDialog(_MenuItem item) {
+  void _showProductDetailDialog(_MenuItem item, {Object? heroTag}) {
     if (!currentFeatureFlags.menu) {
       showFeatureLockedDialog(context, tr('Ürün Detayı', 'Product Detail'));
       return;
     }
     _showKioskDialog<void>(
       context,
-      _ProductDetailDialog(item: item),
+      _ProductDetailDialog(item: item, heroTag: heroTag),
       label: _menuItemName(item),
     );
   }
@@ -2271,11 +2271,16 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                       ],
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: _buildResultVisual(
-                      drink: drink,
-                      imagePath: resultImagePath,
-                      remoteImageUrl: resultImageUrl,
-                      size: isCompact ? 100 : 120,
+                    child: _productHero(
+                      menuItem == null
+                          ? null
+                          : _productHeroTag('result', menuItem),
+                      _buildResultVisual(
+                        drink: drink,
+                        imagePath: resultImagePath,
+                        remoteImageUrl: resultImageUrl,
+                        size: isCompact ? 100 : 120,
+                      ),
                     ),
                   ),
                   SizedBox(width: isCompact ? 12 : 18),
@@ -2327,7 +2332,10 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                         if (menuItem != null) ...[
                           const SizedBox(height: 10),
                           BouncyButton(
-                            onTap: () => _showProductDetailDialog(menuItem),
+                            onTap: () => _showProductDetailDialog(
+                              menuItem,
+                              heroTag: _productHeroTag('result', menuItem),
+                            ),
                             child: Container(
                               padding: EdgeInsets.symmetric(
                                 horizontal: isCompact ? 12 : 14,

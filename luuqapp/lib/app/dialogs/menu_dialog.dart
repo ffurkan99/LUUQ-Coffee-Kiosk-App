@@ -682,7 +682,7 @@ class _MenuDialogState extends State<_MenuDialog> {
   }
 
   // ═══ PRODUCT DETAIL DIALOG ═══
-  void _showProductDetailDialog(_MenuItem item) {
+  void _showProductDetailDialog(_MenuItem item, {Object? heroTag}) {
     if (!currentFeatureFlags.menu) {
       showFeatureLockedDialog(context, tr('Ürün Detayı', 'Product Detail'));
       return;
@@ -694,7 +694,7 @@ class _MenuDialogState extends State<_MenuDialog> {
     );
     _showKioskDialog<void>(
       context,
-      _ProductDetailDialog(item: item),
+      _ProductDetailDialog(item: item, heroTag: heroTag),
       label: _menuItemName(item),
     );
   }
@@ -705,6 +705,12 @@ class _MenuDialogState extends State<_MenuDialog> {
     final isPopular = item.tags.contains('Popüler');
     final isSpecial = item.tags.contains('Special');
     final dual = _hasDualPrice(item.price);
+    // The grid key is part of the tag: while one grid fades into the next,
+    // the same product is on screen twice.
+    final heroTag = _productHeroTag(
+      'menu:${_searchQuery.isNotEmpty ? 'search:$_searchQuery' : _selectedCategory}',
+      item,
+    );
 
     return BouncyButton(
       onTap: () {
@@ -713,7 +719,7 @@ class _MenuDialogState extends State<_MenuDialog> {
           item.name,
           _selectedCategory,
         );
-        _showProductDetailDialog(item);
+        _showProductDetailDialog(item, heroTag: heroTag);
       },
       child: Container(
         padding: const EdgeInsets.all(14),
@@ -746,22 +752,27 @@ class _MenuDialogState extends State<_MenuDialog> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // ─── THUMBNAIL AREA ───
-            Container(
-              width: 88,
-              height: 88,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: const Color(0xFF16131D).withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-              ),
-              child: _buildMenuImage(
-                fallbackIcon: item.icon,
-                fallbackColor: _gold.withValues(alpha: 0.75),
-                assetPath: item.imagePath,
-                remoteImageUrl: item.remoteImageUrl,
-                cacheWidth: 176,
-                fit: BoxFit.cover,
+            _productHero(
+              heroTag,
+              Container(
+                width: 88,
+                height: 88,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16131D).withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
+                ),
+                child: _buildMenuImage(
+                  fallbackIcon: item.icon,
+                  fallbackColor: _gold.withValues(alpha: 0.75),
+                  assetPath: item.imagePath,
+                  remoteImageUrl: item.remoteImageUrl,
+                  cacheWidth: 176,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             const SizedBox(width: 16),

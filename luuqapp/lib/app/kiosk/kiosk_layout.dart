@@ -217,7 +217,11 @@ extension _KioskLayout on _CafeKioskScreenState {
                           value: _menuItemName(drink),
                           imagePath: drink.imagePath,
                           remoteImageUrl: drink.remoteImageUrl,
-                          onTap: () => _showProductDetailDialog(drink),
+                          heroTag: _productHeroTag('barista', drink),
+                          onTap: () => _showProductDetailDialog(
+                            drink,
+                            heroTag: _productHeroTag('barista', drink),
+                          ),
                         ),
                       ),
                     if (drink != null && dessert != null)
@@ -230,7 +234,11 @@ extension _KioskLayout on _CafeKioskScreenState {
                           value: _menuItemName(dessert),
                           imagePath: dessert.imagePath,
                           remoteImageUrl: dessert.remoteImageUrl,
-                          onTap: () => _showProductDetailDialog(dessert),
+                          heroTag: _productHeroTag('barista', dessert),
+                          onTap: () => _showProductDetailDialog(
+                            dessert,
+                            heroTag: _productHeroTag('barista', dessert),
+                          ),
                         ),
                       ),
                   ],
@@ -250,6 +258,7 @@ extension _KioskLayout on _CafeKioskScreenState {
     required String? imagePath,
     required String? remoteImageUrl,
     required VoidCallback onTap,
+    Object? heroTag,
   }) {
     final isCompact = MediaQuery.sizeOf(context).width < 700;
     return BouncyButton(
@@ -270,19 +279,22 @@ extension _KioskLayout on _CafeKioskScreenState {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: isCompact ? 72 : 88,
-              height: isCompact ? 72 : 88,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: _buildMenuImage(
-                fallbackIcon: icon,
-                assetPath: imagePath,
-                remoteImageUrl: remoteImageUrl,
-                cacheWidth: 176,
+            _productHero(
+              heroTag,
+              Container(
+                width: isCompact ? 72 : 88,
+                height: isCompact ? 72 : 88,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _buildMenuImage(
+                  fallbackIcon: icon,
+                  assetPath: imagePath,
+                  remoteImageUrl: remoteImageUrl,
+                  cacheWidth: 176,
+                ),
               ),
             ),
             SizedBox(height: isCompact ? 14 : 16),

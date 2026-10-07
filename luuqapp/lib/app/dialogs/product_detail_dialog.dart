@@ -1,8 +1,20 @@
 part of '../../main.dart';
 
+/// Hero tag of a product photo that opens [item]'s detail. [source] keeps
+/// the same product shown in two places on one screen apart.
+Object _productHeroTag(String source, _MenuItem item) =>
+    ('product', source, item.id ?? item.name);
+
+/// Lets the photo fly into the detail dialog when [tag] is set.
+Widget _productHero(Object? tag, Widget child) =>
+    tag == null ? child : Hero(tag: tag, child: child);
+
 class _ProductDetailDialog extends StatelessWidget {
   final _MenuItem item;
-  const _ProductDetailDialog({required this.item});
+
+  /// The tag of the photo that was tapped; the detail photo flies from it.
+  final Object? heroTag;
+  const _ProductDetailDialog({required this.item, this.heroTag});
 
   bool _hasDualPrice(String price) => price.contains('/');
 
@@ -146,33 +158,37 @@ class _ProductDetailDialog extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 200,
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF14101A),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.1),
+                  _productHero(
+                    heroTag,
+                    Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF14101A),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.1),
+                        ),
                       ),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child:
-                        displayImagePath == null && item.remoteImageUrl == null
-                        ? Center(
-                            child: Icon(
-                              item.icon,
-                              size: 90,
-                              color: _gold.withValues(alpha: 0.7),
+                      clipBehavior: Clip.antiAlias,
+                      child:
+                          displayImagePath == null &&
+                              item.remoteImageUrl == null
+                          ? Center(
+                              child: Icon(
+                                item.icon,
+                                size: 90,
+                                color: _gold.withValues(alpha: 0.7),
+                              ),
+                            )
+                          : _buildMenuImage(
+                              fallbackIcon: item.icon,
+                              assetPath: displayImagePath,
+                              remoteImageUrl: item.remoteImageUrl,
+                              cacheWidth: 400,
+                              fit: BoxFit.cover,
                             ),
-                          )
-                        : _buildMenuImage(
-                            fallbackIcon: item.icon,
-                            assetPath: displayImagePath,
-                            remoteImageUrl: item.remoteImageUrl,
-                            cacheWidth: 400,
-                            fit: BoxFit.cover,
-                          ),
+                    ),
                   ),
                   const SizedBox(height: 28),
                   Text(
