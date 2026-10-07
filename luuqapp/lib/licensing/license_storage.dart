@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -37,6 +38,9 @@ class LicenseStorage {
   // Written by older versions and never read; only cleared on reset now.
   static const String _keyLastSuccessfulCheckAt = 'last_successful_check_at';
   static const String _keyMenuAccessToken = 'menu_access_token';
+  // Hash of the last saved status fields: a 30 s status check that changed
+  // nothing must not rewrite ~10 encrypted keys (keystore work, flash wear).
+  static const String _keyStatusDigest = 'license_status_digest';
   static const String _keyMenuProfileId = 'menu_profile_id';
   static const String _keyMenuProfileGeneration = 'menu_profile_generation';
   static const String _keyAdminSessionToken = 'menu_admin_session_token';
@@ -104,30 +108,58 @@ class LicenseStorage {
     final previousLicenseKey = await _read(_keyLicenseKey);
     final previousProfileId = await _read(_keyMenuProfileId);
     final previousGeneration = await _read(_keyMenuProfileGeneration);
-    await _write(_keyLicenseMode, status.mode.name);
-    if (licenseKey != null) await _write(_keyLicenseKey, licenseKey);
-    await _write(_keyBranchName, status.branchName ?? '');
-    await _write(_keyCustomerName, status.customerName ?? '');
-    await _write(_keyPlan, status.plan ?? '');
-    await _write(_keyExpiresAt, status.expiresAt ?? '');
-    await _write(_keyTrialExpiresAt, status.trialExpiresAt ?? '');
-    await _write(_keyFeatures, json.encode(status.features.toJson()));
-    if (status.active && status.features.menu &&
-        status.menuAccessToken != null && status.menuAccessToken!.isNotEmpty) {
-      await _write(_keyMenuAccessToken, status.menuAccessToken!);
-    } else {
-      await _delete(_keyMenuAccessToken);
-    }
-    if (status.active && status.features.menu &&
-        status.menuProfileId != null && status.menuProfileId!.isNotEmpty) {
-      await _write(_keyMenuProfileId, status.menuProfileId!);
-    } else {
-      await _delete(_keyMenuProfileId);
-    }
-    if (status.active && status.features.menu && status.menuProfileGeneration != null) {
-      await _write(_keyMenuProfileGeneration, status.menuProfileGeneration.toString());
-    } else {
-      await _delete(_keyMenuProfileGeneration);
+    final menuOn = status.active && status.features.menu;
+    // Field -> value to store; null deletes the field. Order is the write order.
+    final values = <String, String?>{
+      _keyLicenseMode: status.mode.name,
+      _keyLicenseKey: ?licenseKey,
+      _keyBranchName: status.branchName ?? '',
+      _keyCustomerName: status.customerName ?? '',
+      _keyPlan: status.plan ?? '',
+      _keyExpiresAt: status.expiresAt ?? '',
+      _keyTrialExpiresAt: status.trialExpiresAt ?? '',
+      _keyFeatures: json.encode(status.features.toJson()),
+      _keyMenuAccessToken:
+          menuOn &&
+              status.menuAccessToken != null &&
+              status.menuAccessToken!.isNotEmpty
+          ? status.menuAccessToken
+          : null,
+      _keyMenuProfileId:
+          menuOn &&
+              status.menuProfileId != null &&
+              status.menuProfileId!.isNotEmpty
+          ? status.menuProfileId
+          : null,
+      _keyMenuProfileGeneration: menuOn && status.menuProfileGeneration != null
+          ? status.menuProfileGeneration.toString()
+          : null,
+    };
+    // Sorted keys: the license key is only in [values] when it was passed in.
+    final digestFields = {
+      ...values,
+      _keyLicenseKey: licenseKey ?? previousLicenseKey,
+    };
+    final digest = sha256
+        .convert(
+          utf8.encode(
+            json.encode({
+              for (final key in digestFields.keys.toList()..sort())
+                key: digestFields[key],
+            }),
+          ),
+        )
+        .toString();
+    if (await _read(_keyStatusDigest) != digest) {
+      for (final entry in values.entries) {
+        final value = entry.value;
+        if (value == null) {
+          await _delete(entry.key);
+        } else {
+          await _write(entry.key, value);
+        }
+      }
+      await _write(_keyStatusDigest, digest);
     }
     // A license or enrollment change invalidates any prior local admin session.
     // Routine periodic status refreshes for the same profile must keep it, or
@@ -243,6 +275,7 @@ class LicenseStorage {
   }
 
   static Future<void> clearLicense() async {
+    await _delete(_keyStatusDigest);
     await _delete(_keyLicenseMode);
     await _delete(_keyLicenseKey);
     await _delete(_keyBranchName);
