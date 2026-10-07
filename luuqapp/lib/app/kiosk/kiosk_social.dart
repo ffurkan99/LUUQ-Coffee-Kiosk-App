@@ -57,15 +57,11 @@ extension _KioskSocial on _CafeKioskScreenState {
                 showFeatureLockedDialog(context, tr('Hesap Kimde', 'Who Pays'));
                 return;
               }
-              _idleTimer?.cancel();
-              await _showAnimatedDialog(
+              await _showCustomerDialog(
                 const _HesapKimdeDialog(),
                 'HesapKimde',
                 barrierDismissible: false,
               );
-              if (mounted) {
-                _resetIdleTimer();
-              }
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -142,12 +138,8 @@ extension _KioskSocial on _CafeKioskScreenState {
           showFeatureLockedDialog(context, tr('Ürün Menüsü', 'Product Menu'));
           return;
         }
-        _idleTimer?.cancel();
         unawaited(_LuuqAnalytics.instance.incrementMenuClicks());
-        await _showAnimatedDialog(const _MenuDialog(), 'Menu');
-        if (mounted) {
-          _resetIdleTimer();
-        }
+        await _showCustomerDialog(const _MenuDialog(), 'Menu');
       },
       child: Container(
         width: double.infinity,
@@ -186,6 +178,28 @@ extension _KioskSocial on _CafeKioskScreenState {
         ),
       ),
     );
+  }
+
+  /// Opens a customer dialog (menu, who pays). The idle timer keeps running
+  /// with a longer timeout, so a dialog left open still returns the kiosk to
+  /// its idle screen; the timeout closes open dialogs.
+  Future<void> _showCustomerDialog(
+    Widget dialog,
+    String name, {
+    bool barrierDismissible = true,
+  }) async {
+    GlobalDialogTracker.isCustomerDialogOpen = true;
+    _resetIdleTimer();
+    try {
+      await _showAnimatedDialog(
+        dialog,
+        name,
+        barrierDismissible: barrierDismissible,
+      );
+    } finally {
+      GlobalDialogTracker.isCustomerDialogOpen = false;
+    }
+    if (mounted) _resetIdleTimer();
   }
 
   Future<void> _showAnimatedDialog(

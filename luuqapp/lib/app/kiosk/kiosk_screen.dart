@@ -113,6 +113,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     }
     final idleTimeout = GlobalDialogTracker.isAdminSessionOpen
         ? const Duration(seconds: 90)
+        : GlobalDialogTracker.isCustomerDialogOpen
+        ? const Duration(seconds: 60)
         : const Duration(seconds: 15);
     _idleTimer = Timer(idleTimeout, () {
       if (_isInCleaningMode) return;

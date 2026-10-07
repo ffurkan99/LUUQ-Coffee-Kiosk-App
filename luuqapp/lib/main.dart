@@ -170,6 +170,10 @@ class GlobalDialogTracker {
   /// session still closes, and remote menu changes wait until it ends.
   static bool isAdminSessionOpen = false;
 
+  /// The menu or the who-pays dialog is open: the idle timer waits longer
+  /// (60 s) before it closes the dialog and returns to the idle screen.
+  static bool isCustomerDialogOpen = false;
+
   static bool shouldDeferMenuChanges() =>
       shouldPauseIdleTimer() || isAdminSessionOpen;
 

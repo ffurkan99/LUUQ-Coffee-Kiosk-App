@@ -395,6 +395,45 @@ void main() {
     _disableLicensedKiosk();
   });
 
+  testWidgets('an abandoned menu returns to the idle screen after 60 s', (
+    WidgetTester tester,
+  ) async {
+    _enableLicensedKiosk();
+    await _pumpKioskAtSize(tester, const Size(1920, 1080));
+    for (
+      var i = 0;
+      i < 60 && find.text('TÜM MENÜYÜ İNCELE').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.tapAt(const Offset(960, 540));
+      await _pumpFrames(tester, const Duration(milliseconds: 100));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
+    await tester.tap(find.text('TÜM MENÜYÜ İNCELE'));
+    await _pumpFrames(tester, const Duration(milliseconds: 400));
+    expect(find.byType(Dialog), findsOneWidget);
+
+    // Longer than the 15 s main-screen timeout: the open menu stays.
+    for (var s = 0; s < 30; s++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(find.byType(Dialog), findsOneWidget);
+
+    // Past 60 s without a touch the menu closes and the kiosk goes idle.
+    for (var s = 0; s < 32; s++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    await _pumpFrames(tester, const Duration(milliseconds: 400));
+    expect(find.byType(Dialog), findsNothing);
+    expect(GlobalDialogTracker.isCustomerDialogOpen, isFalse);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _pumpFrames(tester, const Duration(milliseconds: 300));
+    _disableLicensedKiosk();
+  });
+
   testWidgets('who pays dialog keeps one size across draw states', (
     WidgetTester tester,
   ) async {
