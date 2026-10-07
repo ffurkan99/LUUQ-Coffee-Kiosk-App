@@ -249,11 +249,15 @@ class MenuService {
     catalog = await _materializeImages(catalog, scopeKey);
     if (requestEpoch != _scopeEpoch) return;
     await _cache.writeActive(scopeKey, catalog);
+    // The kiosk may still show the previous catalog (a new one is held back
+    // during a spin or an admin session), so its images stay until the next
+    // sync replaces it.
+    final previous = catalogNotifier.value;
     catalogNotifier.value = catalog;
     unawaited(_cache.pruneOtherScopes(scopeKey));
     unawaited(
       _cache.pruneImages(scopeKey, {
-        for (final item in catalog.items) ...[
+        for (final item in [...catalog.items, ...?previous?.items]) ...[
           if (item.localImagePath != null) item.localImagePath!,
           if (item.localTransparentImagePath != null)
             item.localTransparentImagePath!,
@@ -270,40 +274,42 @@ class MenuService {
       )
       .timeout(const Duration(seconds: 12));
 
+  /// Image downloads run [_imageDownloadConcurrency] at a time: one by one, a
+  /// new catalog on a slow network took minutes (two images per item, each up
+  /// to a 12 s timeout) before it could be shown.
+  static const int _imageDownloadConcurrency = 4;
+
   Future<MenuCatalog> _materializeImages(
     MenuCatalog catalog,
     String scopeKey,
   ) async {
+    final items = [
+      for (final category in catalog.categories) ...category.items,
+    ];
+    final materialized = List<RemoteMenuItem?>.filled(items.length, null);
+    var next = 0;
+    Future<void> worker() async {
+      while (next < items.length) {
+        final index = next++;
+        materialized[index] = await _materializeItem(items[index], scopeKey);
+      }
+    }
+
+    await Future.wait(
+      List.generate(
+        items.length < _imageDownloadConcurrency
+            ? items.length
+            : _imageDownloadConcurrency,
+        (_) => worker(),
+      ),
+    );
+
+    var index = 0;
     final categories = <RemoteMenuCategory>[];
     for (final category in catalog.categories) {
-      final items = <RemoteMenuItem>[];
-      for (final item in category.items) {
-        final localPath = await _ensureImage(
-          scopeKey: scopeKey,
-          itemId: item.id,
-          variant: 'normal',
-          currentPath: item.localImagePath,
-          url: item.imageUrl,
-          sha256: item.imageSha256,
-          mime: item.imageMime,
-        );
-        final localTransparentPath = await _ensureImage(
-          scopeKey: scopeKey,
-          itemId: item.id,
-          variant: 'transparent',
-          currentPath: item.localTransparentImagePath,
-          url: item.transparentImageUrl,
-          sha256: item.transparentImageSha256,
-          mime: item.transparentImageMime,
-        );
-        items.add(
-          item.copyWith(
-            localImagePath: localPath,
-            localTransparentImagePath: localTransparentPath,
-            clearLocalImagePath: localPath == null,
-            clearLocalTransparentImagePath: localTransparentPath == null,
-          ),
-        );
+      final categoryItems = <RemoteMenuItem>[];
+      for (var i = 0; i < category.items.length; i++) {
+        categoryItems.add(materialized[index++]!);
       }
       categories.add(
         RemoteMenuCategory(
@@ -313,11 +319,41 @@ class MenuService {
           descriptionTr: category.descriptionTr,
           descriptionEn: category.descriptionEn,
           iconKey: category.iconKey,
-          items: items,
+          items: categoryItems,
         ),
       );
     }
     return catalog.copyWithCategories(categories);
+  }
+
+  Future<RemoteMenuItem> _materializeItem(
+    RemoteMenuItem item,
+    String scopeKey,
+  ) async {
+    final localPath = await _ensureImage(
+      scopeKey: scopeKey,
+      itemId: item.id,
+      variant: 'normal',
+      currentPath: item.localImagePath,
+      url: item.imageUrl,
+      sha256: item.imageSha256,
+      mime: item.imageMime,
+    );
+    final localTransparentPath = await _ensureImage(
+      scopeKey: scopeKey,
+      itemId: item.id,
+      variant: 'transparent',
+      currentPath: item.localTransparentImagePath,
+      url: item.transparentImageUrl,
+      sha256: item.transparentImageSha256,
+      mime: item.transparentImageMime,
+    );
+    return item.copyWith(
+      localImagePath: localPath,
+      localTransparentImagePath: localTransparentPath,
+      clearLocalImagePath: localPath == null,
+      clearLocalTransparentImagePath: localTransparentPath == null,
+    );
   }
 
   /// Returns a verified local path for one image variant, downloading it when

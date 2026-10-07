@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -278,6 +279,55 @@ void main() {
     expect(await pending(), isEmpty);
   });
 
+  test('menu images download four at a time and all arrive', () async {
+    // A valid JPEG body and its hash, shared by every item.
+    final jpeg = [0xff, 0xd8, 0xff, ...List<int>.filled(64, 1)];
+    final jpegSha = sha256OfBytes(jpeg);
+    var inFlight = 0;
+    var maxInFlight = 0;
+    var downloads = 0;
+    final imageClient = MockClient((request) async {
+      inFlight++;
+      maxInFlight = inFlight > maxInFlight ? inFlight : maxInFlight;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      inFlight--;
+      downloads++;
+      return http.Response.bytes(jpeg, 200,
+          headers: {'content-type': 'image/jpeg'});
+    });
+    final imageCache = MenuCache(client: imageClient, rootDirectory: directory);
+    service = MenuService.forTest(cache: imageCache);
+    final response = _catalogResponse();
+    final items = [
+      for (var i = 0; i < 10; i++)
+        {
+          'id': 'img$i',
+          'category_id': 'c1',
+          'name_tr': 'Ürün $i',
+          'image_url': 'https://example.test/img$i.jpg',
+          'image_sha256': jpegSha,
+          'image_mime': 'image/jpeg',
+        },
+    ];
+    ((response['catalog'] as Map)['categories'] as List).first['items'] = items;
+    await http.runWithClient(
+      () => service.syncNow(force: true),
+      () => MockClient((request) async {
+        if (request.url.toString() == LicenseConfig.menuUrl) {
+          return http.Response(jsonEncode(response), 200);
+        }
+        return http.Response('{}', 404);
+      }),
+    );
+    expect(downloads, 10);
+    expect(maxInFlight, 4);
+    final catalog = service.catalogNotifier.value!;
+    expect(catalog.items.every((item) => item.localImagePath != null), isTrue);
+    expect(catalog.items.map((item) => item.id).toList(),
+        [for (var i = 0; i < 10; i++) 'img$i'],
+        reason: 'order is kept');
+  });
+
   test('a change queued while the older send is finishing is not lost',
       () async {
     final gated = _GatedCache(rootDirectory: directory);
@@ -320,6 +370,8 @@ void main() {
     expect(await gated.readPendingConfig('profile:$_profileId'), isEmpty);
   });
 }
+
+String sha256OfBytes(List<int> bytes) => sha256.convert(bytes).toString();
 
 /// Records pending-config writes and can hold one read open after it has
 /// read the file, so a test can interleave a newer change with an in-flight
