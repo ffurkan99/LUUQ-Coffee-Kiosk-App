@@ -122,6 +122,19 @@ void main() {
     );
   });
 
+  testWidgets('an inactive 200 with an unknown reason is a server problem', (
+    tester,
+  ) async {
+    await _runGateScenario(
+      tester,
+      (_) async => http.Response(
+        jsonEncode({'active': false, 'reason': 'brand_new_reason'}),
+        200,
+      ),
+      () => _expectServerUnavailable(tester),
+    );
+  });
+
   testWidgets('invalid license shows the existing activation UI', (
     tester,
   ) async {
@@ -356,7 +369,12 @@ void main() {
   testWidgets('active cache cannot authorize startup when API is unreachable', (
     tester,
   ) async {
-    await LicenseService.instance.init();
+    // A previously active session (what a cached status used to restore).
+    LicenseService.instance.statusNotifier.value = const LicenseStatus(
+      active: true,
+      mode: LicenseMode.licensed,
+      features: FeatureFlags.proDefault,
+    );
     expect(LicenseService.instance.currentStatus.active, isTrue);
 
     await _runGateScenario(

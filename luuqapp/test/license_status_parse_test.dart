@@ -40,6 +40,29 @@ void main() {
     expect(status.plan, isNull);
   });
 
+  test('mode and plan are matched exactly, mode first', () {
+    LicenseMode modeOf(Map<String, dynamic> json) => LicenseStatus.fromJson({
+      'active': true,
+      ...json,
+    }, LicenseMode.none).mode;
+    // A paid plan whose name contains "Deneme" stays licensed.
+    expect(
+      modeOf({'mode': 'licensed', 'plan': 'Pro Deneme'}),
+      LicenseMode.licensed,
+    );
+    expect(modeOf({'mode': 'trial', 'plan': 'Deneme'}), LicenseMode.trial);
+    expect(modeOf({'plan': 'Deneme'}), LicenseMode.trial);
+    expect(modeOf({'mode': '', 'plan': 'pro'}), LicenseMode.licensed);
+    // "inactive" contains "active" but is not a licensed mode.
+    expect(
+      LicenseStatus.fromJson({
+        'active': false,
+        'mode': 'inactive',
+      }, LicenseMode.none).mode,
+      LicenseMode.none,
+    );
+  });
+
   test('only a real true activates', () {
     for (final value in [1, 'true', null]) {
       final status = LicenseStatus.fromJson({

@@ -390,7 +390,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     super.initState();
     activeInstance = this;
     UpdateService.enableKioskMode();
-    FeatureSyncService.instance.start();
+    FeatureSyncService.instance.start(this);
     LicenseService.instance.statusNotifier.addListener(
       _handleLicenseStatusChange,
     );
@@ -839,7 +839,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     if (activeInstance == this) {
       activeInstance = null;
     }
-    FeatureSyncService.instance.stop();
+    FeatureSyncService.instance.stopIfOwner(this);
     _videoRetryTimer?.cancel();
     LicenseService.instance.statusNotifier.removeListener(
       _handleLicenseStatusChange,

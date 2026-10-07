@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -80,5 +81,35 @@ void main() {
         isNot(LicenseService.getLocalizedError('definitely_unknown')),
       );
     }
+  });
+
+  test('concurrent status checks share one request', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      'device_id': 'test-device-id',
+      'device_fingerprint_hash': 'test-device-fingerprint',
+      'license_mode': 'licensed',
+      'license_key': 'LUUQ-TEST-TEST-TEST-TEST',
+    });
+    var requests = 0;
+    final release = Completer<void>();
+    await http.runWithClient(
+      () async {
+        final first = LicenseService.instance.checkStatus();
+        final second = LicenseService.instance.checkStatus();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        release.complete();
+        final results = await Future.wait([first, second]);
+        expect(identical(results[0], results[1]), isTrue);
+      },
+      () => MockClient((_) async {
+        requests++;
+        await release.future;
+        return http.Response(
+          jsonEncode({'active': true, 'mode': 'licensed'}),
+          200,
+        );
+      }),
+    );
+    expect(requests, 1);
   });
 }

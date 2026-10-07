@@ -95,25 +95,6 @@ class LicenseService {
     return LicenseStatus.inactive(reason, localMode);
   }
 
-  /// Initialize and load cached license/trial info on startup
-  Future<void> init() async {
-    try {
-      // Warm up device model and app version cache asynchronously on startup
-      DeviceIdentityService.getDeviceModel().catchError((_) => 'Cihaz');
-      DeviceIdentityService.getAppVersion().catchError((_) => 'unknown');
-      final cached = await LicenseStorage.getCachedLicenseStatus();
-      statusNotifier.value = cached;
-    } on LicenseStorageException catch (error) {
-      statusNotifier.value = const LicenseStatus(
-        active: false,
-        mode: LicenseMode.none,
-        features: FeatureFlags.lockedAll,
-      );
-      debugPrint('[LICENSE][STORAGE] LicenseService.init failed: $error');
-      rethrow;
-    }
-  }
-
   /// Validate a license key with the server
   Future<LicenseStatus> validateLicense(String licenseKey) async {
     try {
@@ -177,9 +158,12 @@ class LicenseService {
           statusNotifier.value = status;
           return statusNotifier.value;
         } else {
-          // Failure: do NOT clear existing license/trial state or change statusNotifier
+          // Failure: do NOT clear existing license/trial state or change statusNotifier.
+          // A reason this app does not know is a server problem, not a verdict.
           return LicenseStatus.inactive(
-            status.reason ?? 'invalid_license',
+            _isAuthoritativeInactiveResponse(data)
+                ? status.reason ?? 'invalid_license'
+                : 'server_error',
             LicenseMode.none,
             lastCheckedAt: DateTime.now(),
           );
@@ -213,8 +197,28 @@ class LicenseService {
     }
   }
 
-  /// Refresh and verify license or trial status online
-  Future<LicenseStatus> checkStatus() async {
+  Future<LicenseStatus>? _checkInFlight;
+
+  /// Refresh and verify license or trial status online.
+  ///
+  /// Concurrent callers (the 30 s sync, the menu's 401 retry, the update
+  /// flow) share one request: two parallel checks each issue a new menu
+  /// token, and the reply that lands last could store the revoked one.
+  /// The request itself is bounded by [LicenseConfig.apiTimeout].
+  Future<LicenseStatus> checkStatus() {
+    final pending = _checkInFlight;
+    if (pending != null) return pending;
+    final run = _checkStatusOnce();
+    _checkInFlight = run;
+    void release() {
+      if (identical(_checkInFlight, run)) _checkInFlight = null;
+    }
+
+    run.then((_) => release(), onError: (Object _) => release());
+    return run;
+  }
+
+  Future<LicenseStatus> _checkStatusOnce() async {
     try {
       final licenseKey = await LicenseStorage.getLicenseKey();
 
@@ -269,19 +273,22 @@ class LicenseService {
           .timeout(LicenseConfig.apiTimeout);
 
       // The current LUUQ backend reports authoritative inactive license
-      // states with HTTP 400. Accept only a strict, known inactive payload;
-      // malformed/unknown 4xx responses and all 5xx responses remain server
-      // failures so they cannot revoke a running session accidentally.
+      // states with HTTP 400. Accept only a strict, known inactive payload,
+      // whatever the status code: malformed/unknown answers (an inactive 200
+      // with a reason this app does not know included) and all 5xx responses
+      // remain server failures, so they cannot lock a running kiosk.
       if (response.statusCode == 200 || response.statusCode == 400) {
         final data = _decodeExpectedLicenseResponse(response.body);
-        if (response.statusCode == 400 &&
-            !_isAuthoritativeInactiveResponse(data)) {
-          return LicenseStatus.inactive('server_error', LicenseMode.licensed);
-        }
         final isRevoked =
             data['reason']?.toString() == 'device_revoked' ||
             data['reset_required'] == true ||
             data['reset_required']?.toString() == 'true';
+        final notActive = data['active'] != true;
+        if (!isRevoked &&
+            (response.statusCode == 400 || notActive) &&
+            !_isAuthoritativeInactiveResponse(data)) {
+          return LicenseStatus.inactive('server_error', LicenseMode.licensed);
+        }
 
         if (isRevoked) {
           if (kDebugMode) {

@@ -11,6 +11,12 @@ class _CountingStorage extends FlutterSecureStorage {
   int writes = 0;
   int deletes = 0;
 
+  /// Yield on every call so concurrent operations could interleave.
+  bool slow = false;
+
+  /// Throw on this write number (1-based), simulating a crash mid-save.
+  int? failOnWrite;
+
   @override
   Future<String?> read({
     required String key,
@@ -20,7 +26,10 @@ class _CountingStorage extends FlutterSecureStorage {
     WebOptions? webOptions,
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
-  }) async => values[key];
+  }) async {
+    if (slow) await Future<void>.delayed(Duration.zero);
+    return values[key];
+  }
 
   @override
   Future<void> write({
@@ -33,7 +42,11 @@ class _CountingStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
+    if (slow) await Future<void>.delayed(Duration.zero);
     writes++;
+    if (failOnWrite != null && writes == failOnWrite) {
+      throw Exception('simulated crash');
+    }
     if (value == null) {
       values.remove(key);
     } else {
@@ -51,6 +64,7 @@ class _CountingStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
+    if (slow) await Future<void>.delayed(Duration.zero);
     deletes++;
     values.remove(key);
   }
@@ -114,6 +128,53 @@ void main() {
     await LicenseStorage.saveLicenseStatus(status, licenseKey: 'LUUQ-KEY');
     expect(storage.values['customer_name'], 'LUUQ');
     expect(storage.values['menu_access_token'], 'token-1');
+  });
+
+  test('concurrent save, clear and save end in the last state', () async {
+    storage.slow = true;
+    const other = LicenseStatus(
+      active: true,
+      mode: LicenseMode.licensed,
+      customerName: 'Başka',
+      branchName: 'Şube 2',
+      features: FeatureFlags.proDefault,
+      menuAccessToken: 'token-2',
+      menuProfileId: 'profile-2',
+      menuProfileGeneration: 2,
+    );
+    await Future.wait([
+      LicenseStorage.saveLicenseStatus(status, licenseKey: 'LUUQ-KEY'),
+      LicenseStorage.clearLicense(),
+      LicenseStorage.saveLicenseStatus(other, licenseKey: 'LUUQ-KEY'),
+    ]);
+    expect(storage.values['customer_name'], 'Başka');
+    expect(storage.values['branch_name'], 'Şube 2');
+    expect(storage.values['menu_access_token'], 'token-2');
+    expect(storage.values['license_key'], 'LUUQ-KEY');
+  });
+
+  test('a save cut off halfway is fully rewritten next time', () async {
+    await LicenseStorage.saveLicenseStatus(status, licenseKey: 'LUUQ-KEY');
+    const renamed = LicenseStatus(
+      active: true,
+      mode: LicenseMode.licensed,
+      customerName: 'LUUQ',
+      branchName: 'Yeni Şube',
+      features: FeatureFlags.proDefault,
+      menuAccessToken: 'token-1',
+      menuProfileId: 'profile-1',
+      menuProfileGeneration: 1,
+    );
+    storage.failOnWrite = storage.writes + 3;
+    await expectLater(
+      LicenseStorage.saveLicenseStatus(renamed),
+      throwsA(anything),
+    );
+    expect(storage.values['license_status_digest'], isNull);
+    storage.failOnWrite = null;
+    await LicenseStorage.saveLicenseStatus(renamed);
+    expect(storage.values['branch_name'], 'Yeni Şube');
+    expect(storage.values['license_status_digest'], isNotNull);
   });
 
   test(

@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'license_status.dart';
-import 'feature_flags.dart';
 
 enum LicenseStorageFailureKind { read, write, delete, malformedData }
 
@@ -101,13 +100,23 @@ class LicenseStorage {
   static Future<void> saveDeviceFingerprintHash(String hash) async => _write(_keyDeviceFingerprintHash, hash);
   static Future<String?> getDeviceFingerprintHash() async => _read(_keyDeviceFingerprintHash);
 
+  /// A status save is a dozen separate writes. When a newer save or a clear
+  /// starts meanwhile (30 s sync, menu 401 retry, update flow), the older one
+  /// stops at its next step instead of writing stale values over the new
+  /// ones. Nothing waits on anything, so a stuck call cannot block the rest.
+  static int _stateGeneration = 0;
+
   static Future<void> saveLicenseStatus(
     LicenseStatus status, {
     String? licenseKey,
   }) async {
+    final generation = ++_stateGeneration;
+    bool superseded() => generation != _stateGeneration;
+
     final previousLicenseKey = await _read(_keyLicenseKey);
     final previousProfileId = await _read(_keyMenuProfileId);
     final previousGeneration = await _read(_keyMenuProfileGeneration);
+    if (superseded()) return;
     final menuOn = status.active && status.features.menu;
     // Field -> value to store; null deletes the field. Order is the write order.
     final values = <String, String?>{
@@ -151,7 +160,11 @@ class LicenseStorage {
         )
         .toString();
     if (await _read(_keyStatusDigest) != digest) {
+      // Drop the old digest first: if the writes below stop halfway, the next
+      // save sees no matching digest and rewrites every field.
+      await _delete(_keyStatusDigest);
       for (final entry in values.entries) {
+        if (superseded()) return;
         final value = entry.value;
         if (value == null) {
           await _delete(entry.key);
@@ -159,8 +172,10 @@ class LicenseStorage {
           await _write(entry.key, value);
         }
       }
+      if (superseded()) return;
       await _write(_keyStatusDigest, digest);
     }
+    if (superseded()) return;
     // A license or enrollment change invalidates any prior local admin session.
     // Routine periodic status refreshes for the same profile must keep it, or
     // an admin editing the wheel/barista loses their token every sync cycle.
@@ -202,100 +217,38 @@ class LicenseStorage {
     _malformed(_keyLicenseMode, const FormatException('Stored license mode is invalid.'));
   }
 
-  static Future<LicenseStatus> getCachedLicenseStatus() async {
-    final licenseKey = await getLicenseKey();
-    final mode = await getLicenseMode();
-    if (licenseKey == null || licenseKey.isEmpty || mode == LicenseMode.none) {
-      return const LicenseStatus(active: false, mode: LicenseMode.none, features: FeatureFlags.lockedAll);
+  static Future<void> clearLicense() async {
+    final generation = ++_stateGeneration;
+    for (final key in const [
+      _keyStatusDigest,
+      _keyLicenseMode,
+      _keyLicenseKey,
+      _keyBranchName,
+      _keyCustomerName,
+      _keyPlan,
+      _keyExpiresAt,
+      _keyTrialExpiresAt,
+      _keyFeatures,
+      _keyMenuAccessToken,
+      _keyMenuProfileId,
+      _keyMenuProfileGeneration,
+      _keyAdminSessionToken,
+      _keyLastSuccessfulCheckAt,
+    ]) {
+      // A save that started after this clear owns the state now.
+      if (generation != _stateGeneration) return;
+      await _delete(key);
     }
+  }
 
-    final branchName = await _read(_keyBranchName);
-    final customerName = await _read(_keyCustomerName);
-    final plan = await _read(_keyPlan);
-    final expiresAt = await _read(_keyExpiresAt);
-    final trialExpiresAt = await _read(_keyTrialExpiresAt);
-    final menuAccessToken = await _read(_keyMenuAccessToken);
-    final menuProfileId = await _read(_keyMenuProfileId);
-    final menuProfileGeneration = await getMenuProfileGeneration();
-
-    final fallbackFlags = mode == LicenseMode.trial
-        ? FeatureFlags.trialDefault
-        : (mode == LicenseMode.licensed ? FeatureFlags.proDefault : FeatureFlags.lockedAll);
-    FeatureFlags features = fallbackFlags;
-    final featuresJsonStr = await _read(_keyFeatures);
-    if (featuresJsonStr != null && featuresJsonStr.isNotEmpty) {
-      try {
-        final decodedValue = json.decode(featuresJsonStr);
-        if (decodedValue is! Map<String, dynamic>) {
-          throw const FormatException('Stored features must be a JSON object.');
-        }
-        features = FeatureFlags.fromJson(decodedValue, fallback: fallbackFlags);
-      } catch (error) {
-        _malformed(_keyFeatures, error);
-      }
-    }
-
-    bool isActive = true;
-    String? reason;
-    if (mode == LicenseMode.trial && trialExpiresAt != null && trialExpiresAt.isNotEmpty) {
-      try {
-        if (DateTime.parse(trialExpiresAt).difference(DateTime.now()).isNegative) {
-          isActive = false;
-          reason = 'trial_expired';
-        }
-      } catch (error) {
-        _malformed(_keyTrialExpiresAt, error);
-      }
-    }
-    if (mode == LicenseMode.licensed && expiresAt != null && expiresAt.isNotEmpty) {
-      try {
-        if (DateTime.parse(expiresAt).difference(DateTime.now()).isNegative) {
-          isActive = false;
-          reason = 'license_expired';
-        }
-      } catch (error) {
-        _malformed(_keyExpiresAt, error);
-      }
-    }
-
-    return LicenseStatus(
-      active: isActive,
-      mode: mode,
-      branchName: branchName,
-      customerName: customerName,
-      plan: plan,
-      expiresAt: expiresAt,
-      trialExpiresAt: trialExpiresAt,
-      features: isActive ? features : FeatureFlags.lockedAll,
-      reason: reason,
-      menuAccessToken: menuAccessToken,
-      menuProfileId: menuProfileId,
-      menuProfileGeneration: menuProfileGeneration,
+  static Future<void> resetForReactivation() {
+    ++_stateGeneration;
+    return _runStorageOperation(
+      kind: LicenseStorageFailureKind.delete,
+      key: 'all_secure_storage',
+      operation: _storage.deleteAll,
     );
   }
-
-  static Future<void> clearLicense() async {
-    await _delete(_keyStatusDigest);
-    await _delete(_keyLicenseMode);
-    await _delete(_keyLicenseKey);
-    await _delete(_keyBranchName);
-    await _delete(_keyCustomerName);
-    await _delete(_keyPlan);
-    await _delete(_keyExpiresAt);
-    await _delete(_keyTrialExpiresAt);
-    await _delete(_keyFeatures);
-    await _delete(_keyMenuAccessToken);
-    await _delete(_keyMenuProfileId);
-    await _delete(_keyMenuProfileGeneration);
-    await _delete(_keyAdminSessionToken);
-    await _delete(_keyLastSuccessfulCheckAt);
-  }
-
-  static Future<void> resetForReactivation() => _runStorageOperation(
-    kind: LicenseStorageFailureKind.delete,
-    key: 'all_secure_storage',
-    operation: _storage.deleteAll,
-  );
 
   static const String _keyDownloadedApkInfo = 'downloaded_apk_info';
 

@@ -42,8 +42,20 @@ class FeatureSyncService with WidgetsBindingObserver {
 
   DateTime? _lastSuccessfulCheck;
 
+  /// When the license server last answered (shown in the admin app info).
+  DateTime? get lastSuccessfulCheck => _lastSuccessfulCheck;
+
+  /// Whoever started the sync last (the kiosk screen). Only that owner's
+  /// [stopIfOwner] stops it, so an old screen being disposed after a new one
+  /// started cannot switch the 30 s check off for the new one.
+  Object? _owner;
+
+  @visibleForTesting
+  bool get isRunning => _syncTimer != null;
+
   /// Start periodic background checking and register lifecycle observer
-  void start() {
+  void start([Object? owner]) {
+    _owner = owner;
     // The gate has just validated online, so the grace period starts now.
     _lastSuccessfulCheck = now();
     connectionLost.value = false;
@@ -56,8 +68,14 @@ class FeatureSyncService with WidgetsBindingObserver {
     // Periyodik sync 30 saniye sonra başlayacak.
   }
 
+  /// Stops the sync only if [owner] is the one that started it.
+  void stopIfOwner(Object owner) {
+    if (identical(_owner, owner)) stop();
+  }
+
   /// Stop periodic checking and unregister observer
   void stop() {
+    _owner = null;
     _syncTimer?.cancel();
     _syncTimer = null;
     _isRedirectingToGate = false;

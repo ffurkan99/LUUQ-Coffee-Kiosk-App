@@ -112,22 +112,21 @@ class LicenseStatus {
 
     final modeLower = modeStr.trim().toLowerCase();
     final planLower = planStr.trim().toLowerCase();
-    LicenseMode resolvedMode = defaultMode;
-    if (trialValues.contains(modeLower) ||
-        trialValues.contains(planLower) ||
-        trialValues.any((v) => modeLower.contains(v) || planLower.contains(v))) {
-      resolvedMode = LicenseMode.trial;
-    } else if (licensedValues.contains(modeLower) ||
-        licensedValues.contains(planLower) ||
-        licensedValues.any((v) => modeLower.contains(v) || planLower.contains(v))) {
-      resolvedMode = LicenseMode.licensed;
-    } else if (modeLower == 'none' || planLower == 'none') {
-      resolvedMode = LicenseMode.none;
-    } else if (defaultMode != LicenseMode.none) {
-      resolvedMode = defaultMode;
-    } else if (active) {
-      resolvedMode = LicenseMode.licensed;
+    // Exact values only, mode before plan: substring matching made "inactive"
+    // look like "active" and a plan named "Pro Deneme" look like a trial.
+    LicenseMode? modeOf(String value) {
+      if (trialValues.contains(value)) return LicenseMode.trial;
+      if (licensedValues.contains(value)) return LicenseMode.licensed;
+      if (value == 'none') return LicenseMode.none;
+      return null;
     }
+
+    final LicenseMode resolvedMode =
+        modeOf(modeLower) ??
+        modeOf(planLower) ??
+        (defaultMode != LicenseMode.none
+            ? defaultMode
+            : (active ? LicenseMode.licensed : defaultMode));
 
     final fallbackFlags = resolvedMode == LicenseMode.trial
         ? FeatureFlags.trialDefault

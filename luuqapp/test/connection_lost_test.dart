@@ -61,6 +61,17 @@ void main() {
     expect(service.connectionLost.value, isFalse);
   });
 
+  test('an old screen stopping late keeps the new screen syncing', () {
+    final oldScreen = Object();
+    final newScreen = Object();
+    service.start(oldScreen);
+    service.start(newScreen);
+    service.stopIfOwner(oldScreen);
+    expect(service.isRunning, isTrue);
+    service.stopIfOwner(newScreen);
+    expect(service.isRunning, isFalse);
+  });
+
   test('a real license problem is not treated as a lost connection', () {
     clock = clock.add(const Duration(minutes: 10));
     const revoked = LicenseStatus(
