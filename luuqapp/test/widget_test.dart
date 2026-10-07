@@ -296,7 +296,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Tekrar Çek'), findsOneWidget);
-    expect(find.text('Kapat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('who_pays_close_button')), findsOneWidget);
     expect(
       tester
           .widget<Text>(
@@ -315,15 +315,11 @@ void main() {
       find.byKey(const ValueKey('who_pays_close_button')),
     );
     expect(redrawRect.width, winnerRect.width);
-    expect(closeRect.width, winnerRect.width);
     expect(redrawRect.left, winnerRect.left);
-    expect(closeRect.left, winnerRect.left);
     expect(redrawRect.right, winnerRect.right);
-    expect(closeRect.right, winnerRect.right);
     expect(redrawRect.top, greaterThanOrEqualTo(winnerRect.bottom));
-    expect(closeRect.top, greaterThan(redrawRect.bottom));
+    expect(closeRect.bottom, lessThan(winnerRect.top));
     expect(redrawRect.top - winnerRect.bottom, 8);
-    expect(closeRect.top - redrawRect.bottom, 8);
     expect(winnerRect.height, greaterThanOrEqualTo(44));
     expect(redrawRect.height, greaterThanOrEqualTo(44));
     expect(closeRect.height, greaterThanOrEqualTo(44));
@@ -485,7 +481,7 @@ void main() {
     await _openWhoPaysDialog(tester, language: AppLanguage.en);
 
     expect(find.text('MIX & DRAW!'), findsOneWidget);
-    expect(find.text('Close'), findsOneWidget);
+    expect(find.byKey(const ValueKey('who_pays_close_button')), findsOneWidget);
     expect(find.bySemanticsLabel('Close Who Pays'), findsOneWidget);
 
     await tester.tap(find.text('MIX & DRAW!'));
@@ -498,7 +494,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Draw Again'), findsOneWidget);
-    expect(find.text('Close'), findsOneWidget);
+    expect(find.byKey(const ValueKey('who_pays_close_button')), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -559,11 +555,8 @@ void main() {
         find.byKey(const ValueKey('who_pays_close_button')),
       );
       expect(redrawRect.width, winnerRect.width);
-      expect(closeRect.width, winnerRect.width);
-      expect(closeRect.left, winnerRect.left);
-      expect(closeRect.right, winnerRect.right);
       expect(redrawRect.top, greaterThanOrEqualTo(winnerRect.bottom));
-      expect(closeRect.top, greaterThan(redrawRect.bottom));
+      expect(closeRect.bottom, lessThan(winnerRect.top));
       expect(overflowErrors, isEmpty);
       expect(tester.takeException(), isNull);
     } finally {
@@ -621,7 +614,7 @@ void main() {
     await _pumpFrames(tester, const Duration(milliseconds: 200));
     await _pumpFrames(tester);
     expect(find.text('Tekrar Çek'), findsOneWidget);
-    expect(find.text('Kapat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('who_pays_close_button')), findsOneWidget);
     final winnerRect = tester.getRect(
       find.byKey(const ValueKey('who_pays_winner_message')),
     );
@@ -632,7 +625,7 @@ void main() {
       find.byKey(const ValueKey('who_pays_close_button')),
     );
     expect(redrawRect.top, greaterThanOrEqualTo(winnerRect.bottom));
-    expect(closeRect.top, greaterThan(redrawRect.bottom));
+    expect(closeRect.bottom, lessThan(winnerRect.top));
     expect(winnerRect.height, greaterThanOrEqualTo(44));
     expect(redrawRect.height, greaterThanOrEqualTo(44));
     expect(closeRect.height, greaterThanOrEqualTo(44));

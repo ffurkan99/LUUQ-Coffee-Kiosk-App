@@ -232,6 +232,59 @@ class _RotatingIconState extends State<_RotatingIcon>
   }
 }
 
+/// The close button of every customer dialog: a 52 px glass circle with an X.
+/// It pops the dialog.
+class _KioskCloseButton extends StatelessWidget {
+  const _KioskCloseButton({super.key, this.semanticLabel});
+
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: semanticLabel ?? tr('Kapat', 'Close'),
+      excludeSemantics: true,
+      child: BouncyButton(
+        onTap: () => Navigator.of(context).maybePop(),
+        child: Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: const Icon(
+            Icons.close_rounded,
+            color: Colors.white70,
+            size: 26,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// [card] with the [_KioskCloseButton] in its top-right corner, inside the
+/// card's rounded edge.
+Widget _withKioskCloseButton(
+  Widget card, {
+  Key? closeKey,
+  String? semanticLabel,
+}) {
+  return Stack(
+    children: [
+      card,
+      Positioned(
+        top: 16,
+        right: 16,
+        child: _KioskCloseButton(key: closeKey, semanticLabel: semanticLabel),
+      ),
+    ],
+  );
+}
+
 class _VirtualCanvasDialogWrapper extends StatelessWidget {
   final Widget child;
   const _VirtualCanvasDialogWrapper({required this.child});

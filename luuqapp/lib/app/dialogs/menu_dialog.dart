@@ -214,24 +214,7 @@ class _MenuDialogState extends State<_MenuDialog> {
               ],
             ),
           ),
-          // Close button
-          BouncyButton(
-            onTap: () => Navigator.of(context).pop(),
-            child: Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: const Icon(
-                Icons.close_rounded,
-                color: Colors.white70,
-                size: 26,
-              ),
-            ),
-          ),
+          const _KioskCloseButton(),
         ],
       ),
     );

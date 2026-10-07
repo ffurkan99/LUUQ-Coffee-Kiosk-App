@@ -300,25 +300,8 @@ class _ProductDetailDialog extends StatelessWidget {
                   ),
                 ),
               ),
-            Positioned(
-              top: -24,
-              right: -20,
-              child: IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.close_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
+            // 16 px in from the card's corner (the card padding is 36/42).
+            const Positioned(top: -26, right: -20, child: _KioskCloseButton()),
           ],
         ),
       ),
