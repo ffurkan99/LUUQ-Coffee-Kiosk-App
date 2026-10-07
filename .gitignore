@@ -9,5 +9,5 @@ luuqapp/android/build/
 # Günlükler
 *.log
 
-# Yerel yapılacaklar listesi (sunucu ayrıntısı içerir; herkese açık depoya girmez)
-KALAN-ISLER.md
+# Tek çalışma dosyası (sunucu ayrıntısı içerir; herkese açık depoya girmez)
+LUUQ-CALISMA.md
