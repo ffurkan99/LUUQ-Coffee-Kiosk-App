@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -191,15 +193,23 @@ class MenuCache {
     // be swapped in transit.
     final uri = Uri.tryParse(url);
     if (uri == null || uri.scheme != 'https') return null;
-    final response = await _client
-        .get(uri)
+    // Streamed with a byte cap: an oversized answer is cut off at 5 MB
+    // instead of being held in memory whole first. Content-Length is only a
+    // hint (it can be missing behind Cloudflare).
+    final streamed = await _client
+        .send(http.Request('GET', uri))
         .timeout(const Duration(seconds: 12));
-    if (response.statusCode != 200 ||
-        response.bodyBytes.isEmpty ||
-        response.bodyBytes.length > 5 * 1024 * 1024) {
+    if (streamed.statusCode != 200 ||
+        (streamed.contentLength ?? 0) > _maxImageBytes) {
+      unawaited(streamed.stream.listen(null).cancel());
       return null;
     }
-    final mime = response.headers['content-type']
+    final bytes = await _readCapped(
+      streamed.stream,
+      _maxImageBytes,
+    ).timeout(const Duration(seconds: 30));
+    if (bytes == null || bytes.isEmpty) return null;
+    final mime = streamed.headers['content-type']
         ?.split(';')
         .first
         .toLowerCase();
@@ -210,10 +220,10 @@ class MenuCache {
             expectedMime.trim().isNotEmpty &&
             mime != expectedMime.trim().toLowerCase()) ||
         (variant == 'transparent' && mime != 'image/png') ||
-        !_hasImageSignature(response.bodyBytes, mime)) {
+        !_hasImageSignature(bytes, mime)) {
       return null;
     }
-    final digest = sha256.convert(response.bodyBytes).toString();
+    final digest = sha256.convert(bytes).toString();
     if (normalizedExpectedHash != null &&
         normalizedExpectedHash.isNotEmpty &&
         digest != normalizedExpectedHash) {
@@ -238,7 +248,7 @@ class MenuCache {
       '${file.path}.${DateTime.now().microsecondsSinceEpoch}.part',
     );
     try {
-      await temp.writeAsBytes(response.bodyBytes, flush: true);
+      await temp.writeAsBytes(bytes, flush: true);
       final writtenHash = await sha256.bind(temp.openRead()).first;
       if (writtenHash.toString() != digest) return null;
       await temp.rename(file.path);
@@ -246,6 +256,22 @@ class MenuCache {
       if (await temp.exists()) await temp.delete();
     }
     return file.path;
+  }
+
+  static const int _maxImageBytes = 5 * 1024 * 1024;
+
+  /// The whole body, or null as soon as it grows past [maxBytes] (returning
+  /// from the loop cancels the download).
+  static Future<Uint8List?> _readCapped(
+    Stream<List<int>> stream,
+    int maxBytes,
+  ) async {
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in stream) {
+      builder.add(chunk);
+      if (builder.length > maxBytes) return null;
+    }
+    return builder.takeBytes();
   }
 
   Future<String?> _findCachedImage({
@@ -283,9 +309,24 @@ class MenuCache {
     if (path == null || path.isEmpty) return false;
     try {
       final file = File(path);
-      if (!await file.exists()) return false;
-      final length = await file.length();
-      if (length == 0) return false;
+      // One stat per check: this runs for every image on every 30 s poll.
+      final stat = await file.stat();
+      if (stat.type == FileSystemEntityType.notFound || stat.size == 0) {
+        return false;
+      }
+      final length = stat.size;
+      final mtimeMs = stat.modified.millisecondsSinceEpoch;
+      final expected = expectedSha256?.trim().toLowerCase();
+      if (expected != null && expected.isNotEmpty) {
+        // Verified before and unchanged since: no need to read it again.
+        final known = _verified[path];
+        if (known != null &&
+            known.size == length &&
+            known.mtimeMs == mtimeMs &&
+            known.sha == expected) {
+          return true;
+        }
+      }
       final extension = path.split('.').last.toLowerCase();
       final mime =
           expectedMime ??
@@ -301,16 +342,14 @@ class MenuCache {
           .openRead(0, length < 12 ? length : 12)
           .fold<List<int>>(<int>[], (bytes, chunk) => bytes..addAll(chunk));
       if (!_hasImageSignature(signature, mime)) return false;
-      final expected = expectedSha256?.trim().toLowerCase();
       if (expected == null || expected.isEmpty) return true;
-      return await _fileSha256(file, length) == expected;
+      return await _fileSha256(file, length, mtimeMs) == expected;
     } catch (_) {
       return false;
     }
   }
 
-  Future<String> _fileSha256(File file, int length) async {
-    final mtimeMs = (await file.lastModified()).millisecondsSinceEpoch;
+  Future<String> _fileSha256(File file, int length, int mtimeMs) async {
     final known = _verified[file.path];
     if (known != null && known.size == length && known.mtimeMs == mtimeMs) {
       return known.sha;

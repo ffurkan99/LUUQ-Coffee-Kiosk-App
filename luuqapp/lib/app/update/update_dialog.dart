@@ -553,11 +553,15 @@ class _UpdateDialogState extends State<_UpdateDialog>
       }
 
       final File file = await UpdateService.downloadApk(apkUrl, (progress) {
-        if (mounted) {
-          setState(() {
-            _progress = progress;
-          });
+        // One rebuild per whole percent, not per downloaded chunk.
+        if (!mounted) return;
+        if ((progress * 100).floor() == (_progress * 100).floor()) {
+          _progress = progress;
+          return;
         }
+        setState(() {
+          _progress = progress;
+        });
       }, cancellationToken: cancellationToken);
       downloadedFile = file;
 

@@ -129,6 +129,77 @@ void main() {
     );
   });
 
+  test('an oversized image without Content-Length is cut off at 5 MB', () async {
+    var chunksSent = 0;
+    final cache = MenuCache(
+      rootDirectory: directory,
+      client: MockClient.streaming((request, _) async {
+        Stream<List<int>> body() async* {
+          for (var i = 0; i < 6; i++) {
+            chunksSent++;
+            yield List<int>.filled(1024 * 1024, 0);
+          }
+        }
+
+        return http.StreamedResponse(
+          body(),
+          200,
+          headers: {'content-type': 'image/png'},
+        );
+      }),
+    );
+    final path = await cache.downloadImage(
+      scopeKey: 'profile:a',
+      url: 'https://example.test/big.png',
+      itemId: 'big',
+    );
+    expect(path, isNull);
+    expect(chunksSent, lessThan(7));
+  });
+
+  test('a Content-Length above 5 MB is refused before reading', () async {
+    var read = false;
+    final cache = MenuCache(
+      rootDirectory: directory,
+      client: MockClient.streaming((request, _) async {
+        Stream<List<int>> body() async* {
+          read = true;
+          yield _pngBytes;
+        }
+
+        return http.StreamedResponse(
+          body(),
+          200,
+          contentLength: 6 * 1024 * 1024,
+          headers: {'content-type': 'image/png'},
+        );
+      }),
+    );
+    final path = await cache.downloadImage(
+      scopeKey: 'profile:a',
+      url: 'https://example.test/big.png',
+      itemId: 'big',
+    );
+    expect(path, isNull);
+    expect(read, isFalse);
+  });
+
+  test('a verified image is not read again while unchanged', () async {
+    final cache = MenuCache(rootDirectory: directory);
+    final file = File('${directory.path}${Platform.pathSeparator}v.png')
+      ..writeAsBytesSync(_pngBytes);
+    final digest = sha256.convert(_pngBytes).toString();
+    final stamp = DateTime(2026, 10, 7, 12);
+    file.setLastModifiedSync(stamp);
+    expect(await cache.isValidImage(file.path, expectedSha256: digest), isTrue);
+
+    // Same size and mtime but unreadable content: the cached verdict stands.
+    final broken = List<int>.filled(_pngBytes.length, 0);
+    file.writeAsBytesSync(broken);
+    file.setLastModifiedSync(stamp);
+    expect(await cache.isValidImage(file.path, expectedSha256: digest), isTrue);
+  });
+
   test('pruneImages keeps referenced files and deletes the rest', () async {
     final cache = MenuCache(rootDirectory: directory);
     await cache.writeActive('profile:a', _catalog('X'));
