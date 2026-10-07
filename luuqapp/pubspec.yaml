@@ -2,7 +2,7 @@ name: luuqapp
 description: "LUUQ kiosk application."
 publish_to: 'none'
 
-version: 1.1.0+22
+version: 1.1.1+23
 
 environment:
   sdk: ^3.13.0
