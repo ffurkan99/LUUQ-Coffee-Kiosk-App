@@ -8,3 +8,7 @@ luuqapp/android/build/
 
 # Günlükler
 *.log
+
+# Yerel çalışma notları (sunucu yapısını anlatıyor; herkese açık depoya girmez)
+menu-kalan-duzeltmeler.md
+menuplani.md
