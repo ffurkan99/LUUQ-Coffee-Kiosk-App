@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
@@ -488,9 +489,12 @@ class UpdateService {
       return false;
     }
     try {
-      final stream = file.openRead();
-      final output = await sha256.bind(stream).first;
-      final hash = output.toString();
+      // Hashing a ~120 MB APK runs in a background isolate so the update
+      // dialog keeps animating while it is verified.
+      final path = file.path;
+      final hash = await Isolate.run(
+        () async => (await sha256.bind(File(path).openRead()).first).toString(),
+      );
       return hash.toLowerCase() == expectedHash.trim().toLowerCase();
     } catch (_) {
       return false;

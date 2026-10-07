@@ -4,6 +4,15 @@ String tr(String trText, String enText) {
   return appLanguageNotifier.value == AppLanguage.tr ? trText : enText;
 }
 
+/// Lower-cases text for search matching. Dart's toLowerCase turns 'İ' into
+/// 'i' plus a combining dot, so "italyan" did not find "İtalyan"; all four
+/// i letters fold to a plain 'i' so Turkish and English names both match.
+String searchFold(String text) => text
+    .replaceAll('İ', 'i')
+    .replaceAll('I', 'i')
+    .replaceAll('ı', 'i')
+    .toLowerCase();
+
 const Map<String, String> _menuDict = {
   'Hafif': 'Light',
   'Güçlü': 'Strong',

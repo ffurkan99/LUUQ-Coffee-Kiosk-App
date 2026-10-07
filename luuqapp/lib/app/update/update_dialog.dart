@@ -535,6 +535,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
           await file.delete();
         } catch (_) {}
         await LicenseStorage.clearDownloadedApkInfo();
+        if (!mounted) return;
         setState(() {
           _error = tr(
             'Güncelleme doğrulama bilgisi eksik.',
@@ -558,6 +559,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
           await file.delete();
         } catch (_) {}
         await LicenseStorage.clearDownloadedApkInfo();
+        if (!mounted) return;
         setState(() {
           _error = tr(
             'Güncelleme dosyası doğrulanamadı. Lütfen tekrar indirin.',
@@ -580,6 +582,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
           await file.delete();
         } catch (_) {}
         await LicenseStorage.clearDownloadedApkInfo();
+        if (!mounted) return;
         setState(() {
           _error = tr(
             'İndirilen APK dosyası okunamadı.',
@@ -612,6 +615,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
           await file.delete();
         } catch (_) {}
         await LicenseStorage.clearDownloadedApkInfo();
+        if (!mounted) return;
         setState(() {
           _error = tr(
             'İndirilen APK bu uygulama ile eşleşmiyor. Lütfen doğru APK dosyasını yükleyin.',
@@ -651,6 +655,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
         final apkVerStr = apkVersionName != null
             ? 'v$apkVersionName${apkVersionCode != null ? '+$apkVersionCode' : ''}'
             : tr('bilinmiyor', 'unknown');
+        if (!mounted) return;
         setState(() {
           _error = tr(
             'İndirilen APK beklenen sürümle eşleşmiyor.\n\nBeklenen: ${widget.licenseStatus.latestVersion ?? 'bilinmiyor'}\nAPK içindeki sürüm: $apkVerStr\n\nLütfen APK’yı doğru pubspec.yaml version değeriyle yeniden build edip tekrar yayınlayın.',
@@ -952,6 +957,7 @@ class _UpdateDialogState extends State<_UpdateDialog>
         }
       } else {
         debugPrint('[UPDATE] install verification failed');
+        if (!mounted) return;
         setState(() {
           _error = tr(
             'Güncelleme kurulumu iptal edildi veya tamamlanmadı.',

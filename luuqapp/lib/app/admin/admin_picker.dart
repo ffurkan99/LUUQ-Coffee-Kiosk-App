@@ -100,13 +100,13 @@ class _AdminSearchPickerDialogState extends State<_AdminSearchPickerDialog> {
   }
 
   List<_MenuItem> get _filteredItems {
-    final query = _searchController.text.trim().toLowerCase();
+    final query = searchFold(_searchController.text.trim());
     if (query.isEmpty) return widget.items;
     return widget.items
         .where(
           (item) =>
-              _menuItemName(item).toLowerCase().contains(query) ||
-              _menuItemDescription(item).toLowerCase().contains(query),
+              searchFold(_menuItemName(item)).contains(query) ||
+              searchFold(_menuItemDescription(item)).contains(query),
         )
         .toList(growable: false);
   }

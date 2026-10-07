@@ -30,7 +30,16 @@ class _LuuqAnalytics {
     }
   }
 
-  Future<void> save() async {
+  /// Saves run one after another; each writes the values current at its turn.
+  Future<void> _saveChain = Future<void>.value();
+
+  Future<void> save() {
+    final next = _saveChain.then((_) => _saveNow());
+    _saveChain = next;
+    return next;
+  }
+
+  Future<void> _saveNow() async {
     try {
       final data = {
         'menuClicks': menuClicks,
@@ -38,9 +47,13 @@ class _LuuqAnalytics {
         'whoPaysPlays': whoPaysPlays,
       };
       final file = await _resolvedFile();
-      await file.writeAsString(json.encode(data));
+      // Temp file + rename: a power cut mid-write keeps the previous counts
+      // instead of a cut file that silently resets them to zero.
+      final temp = File('${file.path}.tmp');
+      await temp.writeAsString(json.encode(data), flush: true);
+      await temp.rename(file.path);
     } catch (e) {
-      // ignore
+      debugPrint('[ANALYTICS] Failed to save local counters: $e');
     }
   }
 

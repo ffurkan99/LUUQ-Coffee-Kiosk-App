@@ -35,13 +35,13 @@ class _MenuDialogState extends State<_MenuDialog> {
   List<_MenuItem> get _filteredItems {
     final items = _currentMenuCategories[_selectedCategory] ?? [];
     if (_searchQuery.isEmpty) return items;
-    final q = _searchQuery.toLowerCase();
+    final q = searchFold(_searchQuery);
     // Search across ALL categories
     final allItems = <_MenuItem>[];
     for (final entry in _currentMenuCategories.entries) {
       for (final item in entry.value) {
-        if (_menuItemName(item).toLowerCase().contains(q) ||
-            _menuItemDescription(item).toLowerCase().contains(q)) {
+        if (searchFold(_menuItemName(item)).contains(q) ||
+            searchFold(_menuItemDescription(item)).contains(q)) {
           allItems.add(item);
         }
       }
