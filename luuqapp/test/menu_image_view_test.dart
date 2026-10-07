@@ -24,6 +24,8 @@ void main() {
     final image = rendered! as Image;
     expect(image.image, isA<FileImage>());
     expect((image.image as FileImage).file.path, r'C:\cache\latte.png');
+    // A photo that is not decoded yet fades in instead of popping in.
+    expect(image.frameBuilder, isNotNull);
     expect(tester.takeException(), isNull);
   });
 
