@@ -6,8 +6,33 @@ Object _productHeroTag(String source, _MenuItem item) =>
     ('product', source, item.id ?? item.name);
 
 /// Lets the photo fly into the detail dialog when [tag] is set.
-Widget _productHero(Object? tag, Widget child) =>
-    tag == null ? child : Hero(tag: tag, child: child);
+Widget _productHero(Object? tag, Widget child) => tag == null
+    ? child
+    : Hero(tag: tag, flightShuttleBuilder: _productPhotoShuttle, child: child);
+
+/// The flying photo: the card's photo (already on screen) at the bottom and
+/// the detail's photo fading in over it with the route, instead of the
+/// detail's still empty box flying alone.
+Widget _productPhotoShuttle(
+  BuildContext flightContext,
+  Animation<double> animation,
+  HeroFlightDirection direction,
+  BuildContext fromHeroContext,
+  BuildContext toHeroContext,
+) {
+  final from = (fromHeroContext.widget as Hero).child;
+  final to = (toHeroContext.widget as Hero).child;
+  final push = direction == HeroFlightDirection.push;
+  final card = push ? from : to;
+  final detail = push ? to : from;
+  return Stack(
+    fit: StackFit.expand,
+    children: [
+      card,
+      FadeTransition(opacity: animation, child: detail),
+    ],
+  );
+}
 
 class _ProductDetailDialog extends StatelessWidget {
   final _MenuItem item;

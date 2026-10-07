@@ -717,7 +717,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                   label: _menuItemName(item),
                   onTap: () => _showProductDetailDialog(item),
                 ),
-              for (final category in _currentMenuCategories.keys)
+              for (final category in _currentMenuCategories.keys.take(6))
                 _buildSuggestionChip(
                   icon:
                       (_activeMenuCategoryIcons.isNotEmpty
