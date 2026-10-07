@@ -6,7 +6,7 @@ void main() {
   test('main.dart honours the kiosk type scale and muted-text rules', () {
     final source = readMainLibrarySource();
 
-    // Kiosk tip ölçeği (docs/ui-audit-2026-07-21.md D1/D2): rozet tabanı
+    // Kiosk tip ölçeği: rozet tabanı
     // _fsBadge (12), ikincil metin tabanı _fsCaption (14). 10-13px serbest
     // literaller ölçek dışıdır ve kiosk izleme mesafesinde okunmaz.
     expect(

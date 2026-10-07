@@ -12,11 +12,10 @@ const _muted = Color(0xFF8A8694);
 
 /// Soluk METİN rengi — _muted'ın okunabilir tonu (koyu zeminlerde ~6:1
 /// kontrast). Kural: metin renginde _muted kullanılmaz; _muted yalnız
-/// ikon/çizgi soldurma içindir. (docs/ui-audit-2026-07-21.md D2)
+/// ikon/çizgi soldurma içindir.
 const _mutedText = Color(0xFFA29DB0);
 
 /// Kiosk tip ölçeği tabanları: rozet/etiket 12, ikincil metin (caption) 14.
 /// Kural: gövde metni 14'ün, rozet 12'nin altına inemez.
-/// (docs/ui-audit-2026-07-21.md D1)
 const double _fsBadge = 12;
 const double _fsCaption = 14;
