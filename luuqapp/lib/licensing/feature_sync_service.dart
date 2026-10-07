@@ -27,12 +27,13 @@ class FeatureSyncService with WidgetsBindingObserver {
   static const Duration featureSyncInterval = Duration(seconds: 30);
 
   /// Internet is required: once the server could not be reached for this
-  /// long, [connectionLost] covers the kiosk. The license stays active, so the
-  /// cover lifts by itself on the next successful check.
-  static const Duration connectionGrace = Duration(minutes: 5);
+  /// long (two failed checks in a row at the 30 s interval), [connectionLost]
+  /// covers the kiosk. A single dropped check does not flash the cover. The
+  /// license stays active, so the cover lifts on the next successful check.
+  static const Duration connectionGrace = Duration(minutes: 1);
 
   /// True while the kiosk has been unable to reach the license server for
-  /// longer than [connectionGrace].
+  /// at least [connectionGrace].
   final ValueNotifier<bool> connectionLost = ValueNotifier<bool>(false);
 
   /// Clock for the grace period (replaced in tests).
@@ -122,7 +123,7 @@ class FeatureSyncService with WidgetsBindingObserver {
       return true;
     }
     final last = _lastSuccessfulCheck ??= now();
-    if (now().difference(last) > connectionGrace) {
+    if (now().difference(last) >= connectionGrace) {
       connectionLost.value = true;
     }
     return false;

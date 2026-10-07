@@ -32,22 +32,23 @@ void main() {
     service.now = DateTime.now;
   });
 
-  test('a short outage keeps the kiosk open', () {
-    clock = clock.add(const Duration(minutes: 4, seconds: 59));
+  test('one failed check (30 s) keeps the kiosk open', () {
+    clock = clock.add(const Duration(seconds: 30));
     expect(service.recordCheckResult(offline), isFalse);
     expect(service.connectionLost.value, isFalse);
   });
 
-  test('more than five minutes without the server covers the kiosk', () {
-    clock = clock.add(const Duration(minutes: 3));
+  test('two failed checks in a row (60 s) cover the kiosk', () {
+    clock = clock.add(const Duration(seconds: 30));
     service.recordCheckResult(offline);
-    clock = clock.add(const Duration(minutes: 2, seconds: 1));
+    expect(service.connectionLost.value, isFalse);
+    clock = clock.add(const Duration(seconds: 30));
     service.recordCheckResult(serverDown);
     expect(service.connectionLost.value, isTrue);
   });
 
   test('the first successful check lifts the cover', () {
-    clock = clock.add(const Duration(minutes: 6));
+    clock = clock.add(const Duration(minutes: 2));
     service.recordCheckResult(offline);
     expect(service.connectionLost.value, isTrue);
 
@@ -55,7 +56,7 @@ void main() {
     expect(service.connectionLost.value, isFalse);
 
     // The grace period restarts from that success.
-    clock = clock.add(const Duration(minutes: 4));
+    clock = clock.add(const Duration(seconds: 30));
     service.recordCheckResult(offline);
     expect(service.connectionLost.value, isFalse);
   });
