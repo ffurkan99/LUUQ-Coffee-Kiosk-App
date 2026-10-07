@@ -31,6 +31,7 @@ import 'analytics/analytics_service.dart';
 import 'analytics/analytics_event.dart';
 import 'src/who_pays/lottery_machine_view.dart';
 import 'src/who_pays/lottery_simulation.dart';
+import 'src/wheel/wheel_pointer_simulation.dart';
 
 part 'app/core/theme.dart';
 part 'app/core/settings.dart';

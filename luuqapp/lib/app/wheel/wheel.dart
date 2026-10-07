@@ -49,6 +49,10 @@ class _SpinTickSound {
   }
 }
 
+/// Gap between the wheel box and its rim (the centre line of the outer ring
+/// and of the pegs); the pointer is placed against it.
+const double _wheelRimInset = 8;
+
 class _DrinkWheelPainter extends CustomPainter {
   const _DrinkWheelPainter({
     required this.drinks,
@@ -66,7 +70,8 @@ class _DrinkWheelPainter extends CustomPainter {
 
     final center = size.center(Offset.zero);
     final radius =
-        size.shortestSide / 2 - 8; // Prevent outer stroke from clipping
+        size.shortestSide / 2 -
+        _wheelRimInset; // Prevent outer stroke from clipping
     final bounds = Rect.fromCircle(center: center, radius: radius);
 
     final sweep = 2 * pi / drinks.length;
@@ -131,7 +136,24 @@ class _DrinkWheelPainter extends CustomPainter {
         ..strokeWidth = 3
         ..color = _gold.withValues(alpha: 0.5),
     );
+
+    // Pegs the pointer catches on, one per segment border.
+    for (var i = 0; i < drinks.length; i++) {
+      final angle = -pi / 2 + i * sweep;
+      final peg = center + Offset(cos(angle), sin(angle)) * radius;
+      canvas.drawCircle(peg, WheelPointerSimulation.pegRadius, _pegPaint);
+      canvas.drawCircle(peg, WheelPointerSimulation.pegRadius, _pegEdgePaint);
+      canvas.drawCircle(peg + const Offset(-1.5, -1.5), 1.6, _pegShinePaint);
+    }
   }
+
+  static final _pegPaint = Paint()..color = _gold;
+  static final _pegEdgePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2
+    ..color = const Color(0xFF8A6A24);
+  static final _pegShinePaint = Paint()
+    ..color = const Color(0xFFFFF1C9).withValues(alpha: 0.9);
 
   @override
   bool shouldRepaint(covariant _DrinkWheelPainter oldDelegate) {
