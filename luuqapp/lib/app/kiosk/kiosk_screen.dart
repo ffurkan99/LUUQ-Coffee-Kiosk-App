@@ -1949,7 +1949,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                             SizedBox(
                                               width: 110,
                                               child: Text(
-                                                drink.shortName.toUpperCase(),
+                                                displayUpper(drink.shortName),
                                                 textAlign: TextAlign.center,
                                                 style: TextStyle(
                                                   color: isSelected

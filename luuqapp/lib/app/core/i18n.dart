@@ -13,6 +13,14 @@ String searchFold(String text) => text
     .replaceAll('ı', 'i')
     .toLowerCase();
 
+/// Upper-cases a name for display. Dart follows the English rule (i -> I),
+/// which shows "Bitki Çayı" as "BITKI ÇAYI"; in Turkish mode i becomes İ and
+/// ı becomes I first. English mode keeps the English rule.
+String displayUpper(String text, {AppLanguage? language}) =>
+    (language ?? appLanguageNotifier.value) == AppLanguage.tr
+    ? text.replaceAll('i', 'İ').replaceAll('ı', 'I').toUpperCase()
+    : text.toUpperCase();
+
 const Map<String, String> _menuDict = {
   'Hafif': 'Light',
   'Güçlü': 'Strong',

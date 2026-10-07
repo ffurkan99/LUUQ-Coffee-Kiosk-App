@@ -566,7 +566,7 @@ class _MenuDialogState extends State<_MenuDialog> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  _menuCategoryName(_selectedCategory).toUpperCase(),
+                  displayUpper(_menuCategoryName(_selectedCategory)),
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
