@@ -27,6 +27,23 @@ Future<void> _pumpFrames(WidgetTester tester, [Duration? duration]) async {
   }
 }
 
+/// Çekiliş sonucu sabit bir süreye değil, topun yuvaya fiziksel olarak
+/// oturmasına bağlıdır; bazı tohumlarda nominal süreyi ~1 sn aşar. Önce
+/// nominal süreyi oynatır, sonra sonuç düğmesi görünene kadar sınırlı bekler
+/// (simülasyonun üst sınırı maxPostDurationWaitSeconds = 8 sn).
+Future<void> _pumpUntilDrawResult(WidgetTester tester) async {
+  await _pumpFrames(
+    tester,
+    Duration(
+      milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
+    ),
+  );
+  final result = find.byKey(const ValueKey('who_pays_redraw_button'));
+  for (var attempt = 0; attempt < 90 && result.evaluate().isEmpty; attempt++) {
+    await _pumpFrames(tester, const Duration(milliseconds: 100));
+  }
+}
+
 void main() {
   testWidgets('app clamps system text enlargement to 120 percent', (
     tester,
@@ -270,12 +287,7 @@ void main() {
     await _pumpFrames(tester);
     expect(find.text('KARILIYOR...'), findsOneWidget);
 
-    await _pumpFrames(
-      tester,
-      Duration(
-        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
-      ),
-    );
+    await _pumpUntilDrawResult(tester);
     await _pumpFrames(tester);
 
     expect(
@@ -372,12 +384,7 @@ void main() {
       idleCloseRect,
     );
 
-    await _pumpFrames(
-      tester,
-      Duration(
-        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
-      ),
-    );
+    await _pumpUntilDrawResult(tester);
     await _pumpFrames(tester, const Duration(milliseconds: 150));
     expect(tester.takeException(), isNull);
     await _pumpFrames(tester, const Duration(milliseconds: 200));
@@ -407,12 +414,7 @@ void main() {
 
     await tester.tap(find.text('MIX & DRAW!'));
     await _pumpFrames(tester);
-    await _pumpFrames(
-      tester,
-      Duration(
-        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
-      ),
-    );
+    await _pumpUntilDrawResult(tester);
     await _pumpFrames(tester, const Duration(milliseconds: 350));
 
     expect(
@@ -513,12 +515,7 @@ void main() {
     expect(find.text('KARIŞTIR & ÇEK!'), findsNothing);
     expect(tester.takeException(), isNull);
 
-    await _pumpFrames(
-      tester,
-      Duration(
-        milliseconds: WhoPaysLotterySimulation.idleDurationMilliseconds + 200,
-      ),
-    );
+    await _pumpUntilDrawResult(tester);
     await _pumpFrames(tester);
     expect(find.text('Tekrar Çek'), findsOneWidget);
     expect(tester.takeException(), isNull);
