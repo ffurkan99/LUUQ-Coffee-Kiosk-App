@@ -14,6 +14,7 @@ class _NewYearThemeSnowRainState extends State<_NewYearThemeSnowRain>
   late final AnimationController _controller;
   final List<_SnowParticle> _particles = [];
   final Random _random = Random();
+  Duration? _lastTick;
 
   @override
   void initState() {
@@ -68,13 +69,16 @@ class _NewYearThemeSnowRainState extends State<_NewYearThemeSnowRain>
   // setState yok: painter _controller'a repaint ile bağlı; burada yalnızca
   // parçacık konumları güncellenir, widget ağacı yeniden kurulmaz.
   void _updateParticles() {
+    final tick = _controller.lastElapsedDuration;
+    final f = effectFrameFactor(_lastTick, tick);
+    _lastTick = tick;
     for (int i = 0; i < _particles.length; i++) {
       final p = _particles[i];
-      p.y += p.speed * 0.05; // Same fall speed factor as candy rain
-      p.rotation += p.rotationSpeed * 0.05; // Spin speed
+      p.y += p.speed * 0.05 * f; // Same fall speed factor as candy rain
+      p.rotation += p.rotationSpeed * 0.05 * f; // Spin speed
 
       // Sway sideways slightly like real snow
-      p.x += sin(_controller.value * pi * 2 + i) * 0.0012;
+      p.x += sin(_controller.value * pi * 2 + i) * 0.0012 * f;
 
       // Reset if it goes off bottom
       if (p.y > 1.1) {
@@ -85,12 +89,16 @@ class _NewYearThemeSnowRainState extends State<_NewYearThemeSnowRain>
 
   @override
   Widget build(BuildContext context) {
+    // Own layer: the snow repaints every frame without making the rest of
+    // the screen repaint with it.
     return Positioned.fill(
       child: IgnorePointer(
-        child: CustomPaint(
-          painter: _SnowRainPainter(
-            particles: _particles,
-            repaint: _controller,
+        child: RepaintBoundary(
+          child: CustomPaint(
+            painter: _SnowRainPainter(
+              particles: _particles,
+              repaint: _controller,
+            ),
           ),
         ),
       ),

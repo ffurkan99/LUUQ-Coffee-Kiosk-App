@@ -224,63 +224,58 @@ extension _KioskOverlays on _CafeKioskScreenState {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (context, child) {
-                        final offset = -1.4 + (_pulseController.value * 2.8);
-                        return ShaderMask(
-                          blendMode: BlendMode.srcIn,
-                          shaderCallback: (bounds) {
-                            return LinearGradient(
-                              colors: const [
-                                Colors.white,
-                                Colors.white,
-                                _gold,
-                                _caramel,
-                                Colors.white,
-                                Colors.white,
-                              ],
-                              stops: const [0.0, 0.30, 0.45, 0.52, 0.68, 1.0],
-                              begin: Alignment(offset - 1.0, 0),
-                              end: Alignment(offset + 1.0, 0),
-                            ).createShader(bounds);
-                          },
-                          child: child,
-                        );
-                      },
-                      child: Text(
-                        appThemeNotifier.value == AppTheme.feast
-                            ? tr('BAYRAMINIZ KUTLU OLSUN', 'HAPPY EID')
-                            : tr('HOŞGELDİNİZ', 'WELCOME'),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: isCompact
-                              ? (appThemeNotifier.value == AppTheme.feast
-                                    ? 28
-                                    : 38)
-                              : (appThemeNotifier.value == AppTheme.feast
-                                    ? 46
-                                    : 56),
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: isCompact ? 2 : 4,
+                    RepaintBoundary(
+                      child: AnimatedBuilder(
+                        animation: _pulseController,
+                        builder: (context, child) {
+                          final offset = -1.4 + (_pulseController.value * 2.8);
+                          return ShaderMask(
+                            blendMode: BlendMode.srcIn,
+                            shaderCallback: (bounds) {
+                              return LinearGradient(
+                                colors: const [
+                                  Colors.white,
+                                  Colors.white,
+                                  _gold,
+                                  _caramel,
+                                  Colors.white,
+                                  Colors.white,
+                                ],
+                                stops: const [0.0, 0.30, 0.45, 0.52, 0.68, 1.0],
+                                begin: Alignment(offset - 1.0, 0),
+                                end: Alignment(offset + 1.0, 0),
+                              ).createShader(bounds);
+                            },
+                            child: child,
+                          );
+                        },
+                        child: Text(
+                          appThemeNotifier.value == AppTheme.feast
+                              ? tr('BAYRAMINIZ KUTLU OLSUN', 'HAPPY EID')
+                              : tr('HOŞGELDİNİZ', 'WELCOME'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: isCompact
+                                ? (appThemeNotifier.value == AppTheme.feast
+                                      ? 28
+                                      : 38)
+                                : (appThemeNotifier.value == AppTheme.feast
+                                      ? 46
+                                      : 56),
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: isCompact ? 2 : 4,
+                          ),
                         ),
                       ),
                     ),
                     SizedBox(height: isCompact ? 16 : 22),
                     _buildAfkConnections(isCompact: isCompact),
                     SizedBox(height: isCompact ? 20 : 28),
-                    AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (context, child) {
-                        return Opacity(
-                          opacity: (0.3 + (_pulseController.value * 0.7)).clamp(
-                            0.0,
-                            1.0,
-                          ),
-                          child: child,
-                        );
-                      },
+                    FadeTransition(
+                      opacity: _pulseController.drive(
+                        Tween<double>(begin: 0.3, end: 1.0),
+                      ),
                       child: Text(
                         tr(
                           'Başlamak için ekrana dokunun',

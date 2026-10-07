@@ -2,6 +2,18 @@ part of '../../main.dart';
 
 // ===== BAYRAM MODU ŞEKER YAĞMURU WIDGETI VE PAINTERI =====
 
+/// How many 60 Hz frames passed between two animation ticks, so particles
+/// move at the same speed on 60 and 120 Hz screens and do not jump after a
+/// stall (capped at 6 frames = 0.1 s). A restarted controller (elapsed time
+/// going back) counts as one frame.
+@visibleForTesting
+double effectFrameFactor(Duration? previous, Duration? current) {
+  if (previous == null || current == null) return 1;
+  final seconds = (current - previous).inMicroseconds / 1e6;
+  if (seconds <= 0) return 1;
+  return min(seconds, 0.1) * 60;
+}
+
 class _FeastThemeCandyRain extends StatefulWidget {
   final int count;
   const _FeastThemeCandyRain({this.count = 40});
@@ -15,6 +27,7 @@ class _FeastThemeCandyRainState extends State<_FeastThemeCandyRain>
   late final AnimationController _controller;
   final List<_CandyParticle> _particles = [];
   final Random _random = Random();
+  Duration? _lastTick;
 
   @override
   void initState() {
@@ -76,13 +89,16 @@ class _FeastThemeCandyRainState extends State<_FeastThemeCandyRain>
   // setState yok: painter _controller'a repaint ile bağlı; burada yalnızca
   // parçacık konumları güncellenir, widget ağacı yeniden kurulmaz.
   void _updateParticles() {
+    final tick = _controller.lastElapsedDuration;
+    final f = effectFrameFactor(_lastTick, tick);
+    _lastTick = tick;
     for (int i = 0; i < _particles.length; i++) {
       final p = _particles[i];
-      p.y += p.speed * 0.05; // Fall speed
-      p.rotation += p.rotationSpeed * 0.05; // Spin speed
+      p.y += p.speed * 0.05 * f; // Fall speed
+      p.rotation += p.rotationSpeed * 0.05 * f; // Spin speed
 
       // Horizontal sway
-      p.x += sin(_controller.value * pi * 2 + i) * 0.001;
+      p.x += sin(_controller.value * pi * 2 + i) * 0.001 * f;
 
       // Reset if it goes off bottom
       if (p.y > 1.1) {
@@ -93,12 +109,16 @@ class _FeastThemeCandyRainState extends State<_FeastThemeCandyRain>
 
   @override
   Widget build(BuildContext context) {
+    // Own layer: the falling candies repaint every frame without making the
+    // rest of the screen repaint with them.
     return Positioned.fill(
       child: IgnorePointer(
-        child: CustomPaint(
-          painter: _CandyRainPainter(
-            particles: _particles,
-            repaint: _controller,
+        child: RepaintBoundary(
+          child: CustomPaint(
+            painter: _CandyRainPainter(
+              particles: _particles,
+              repaint: _controller,
+            ),
           ),
         ),
       ),

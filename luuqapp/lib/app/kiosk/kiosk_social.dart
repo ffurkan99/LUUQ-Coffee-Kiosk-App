@@ -357,32 +357,34 @@ extension _KioskSocial on _CafeKioskScreenState {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) {
-              // Pulse controller goes 0 -> 1 -> 0. We'll map this to a sweeping offset.
-              final offset = -1.0 + (_pulseController.value * 2.0);
-              return ShaderMask(
-                blendMode: BlendMode.srcIn,
-                shaderCallback: (bounds) {
-                  return LinearGradient(
-                    colors: [_gold, _gold, Colors.white, _gold, _gold],
-                    stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
-                    begin: Alignment(offset - 1.5, 0.0),
-                    end: Alignment(offset + 1.5, 0.0),
-                  ).createShader(bounds);
-                },
-                child: Text(
-                  tr('BAĞLANTILARIMIZ', 'OUR CONNECTIONS'),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 3,
-                    color: Colors.white,
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                // Pulse controller goes 0 -> 1 -> 0. We'll map this to a sweeping offset.
+                final offset = -1.0 + (_pulseController.value * 2.0);
+                return ShaderMask(
+                  blendMode: BlendMode.srcIn,
+                  shaderCallback: (bounds) {
+                    return LinearGradient(
+                      colors: [_gold, _gold, Colors.white, _gold, _gold],
+                      stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
+                      begin: Alignment(offset - 1.5, 0.0),
+                      end: Alignment(offset + 1.5, 0.0),
+                    ).createShader(bounds);
+                  },
+                  child: Text(
+                    tr('BAĞLANTILARIMIZ', 'OUR CONNECTIONS'),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 3,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
           SizedBox(height: isCompact ? 16 : 10),
           if (isCompact)
@@ -443,23 +445,19 @@ extension _KioskSocial on _CafeKioskScreenState {
               ],
             ),
           const SizedBox(height: 16),
-          AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) {
-              final opacity = 0.35 + (_pulseController.value * 0.45);
-              return Opacity(
-                opacity: opacity,
-                child: Text(
-                  tr('BÜYÜTMEK İÇİN DOKUNUN', 'TAP TO ENLARGE'),
-                  style: const TextStyle(
-                    color: _cream,
-                    fontSize: _fsCaption,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              );
-            },
+          FadeTransition(
+            opacity: _pulseController.drive(
+              Tween<double>(begin: 0.35, end: 0.8),
+            ),
+            child: Text(
+              tr('BÜYÜTMEK İÇİN DOKUNUN', 'TAP TO ENLARGE'),
+              style: const TextStyle(
+                color: _cream,
+                fontSize: _fsCaption,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
           ),
         ],
       ),
