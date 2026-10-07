@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:luuqapp/main.dart';
 import 'package:luuqapp/licensing/feature_flags.dart';
+import 'package:luuqapp/licensing/feature_sync_service.dart';
 import 'package:luuqapp/licensing/license_gate.dart';
 import 'package:luuqapp/licensing/license_service.dart';
 import 'package:luuqapp/licensing/license_status.dart';
@@ -342,7 +343,10 @@ void main() {
     for (
       var attempt = 0;
       attempt < 120 &&
-          find.byKey(const ValueKey('who_pays_redraw_button')).evaluate().isEmpty;
+          find
+              .byKey(const ValueKey('who_pays_redraw_button'))
+              .evaluate()
+              .isEmpty;
       attempt++
     ) {
       await _pumpFrames(tester, const Duration(milliseconds: 100));
@@ -355,6 +359,39 @@ void main() {
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
+    _disableLicensedKiosk();
+  });
+
+  testWidgets('a lost connection covers the kiosk until it is back', (
+    WidgetTester tester,
+  ) async {
+    _enableLicensedKiosk();
+    await _pumpKioskAtSize(tester, const Size(1920, 1080));
+    // Leave the loading/idle screens first, as a customer tap would.
+    for (
+      var i = 0;
+      i < 60 && find.text('Mini Çarkı Aç').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.tapAt(const Offset(960, 540));
+      await _pumpFrames(tester, const Duration(milliseconds: 100));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+    }
+    expect(find.text('İnternet Bağlantısı Yok'), findsNothing);
+
+    FeatureSyncService.instance.connectionLost.value = true;
+    await _pumpFrames(tester);
+    expect(find.text('İnternet Bağlantısı Yok'), findsOneWidget);
+
+    FeatureSyncService.instance.connectionLost.value = false;
+    await _pumpFrames(tester);
+    expect(find.text('İnternet Bağlantısı Yok'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    // Let the deferred menu precache loop see the disposed screen and stop.
+    await _pumpFrames(tester, const Duration(milliseconds: 300));
     _disableLicensedKiosk();
   });
 
@@ -463,7 +500,10 @@ void main() {
       for (
         var attempt = 0;
         attempt < 120 &&
-            find.byKey(const ValueKey('who_pays_redraw_button')).evaluate().isEmpty;
+            find
+                .byKey(const ValueKey('who_pays_redraw_button'))
+                .evaluate()
+                .isEmpty;
         attempt++
       ) {
         await _pumpFrames(tester, const Duration(milliseconds: 100));

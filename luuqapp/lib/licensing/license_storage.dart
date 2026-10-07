@@ -34,6 +34,7 @@ class LicenseStorage {
   static const String _keyExpiresAt = 'expires_at';
   static const String _keyTrialExpiresAt = 'trial_expires_at';
   static const String _keyFeatures = 'features';
+  // Written by older versions and never read; only cleared on reset now.
   static const String _keyLastSuccessfulCheckAt = 'last_successful_check_at';
   static const String _keyMenuAccessToken = 'menu_access_token';
   static const String _keyMenuProfileId = 'menu_profile_id';
@@ -138,7 +139,6 @@ class LicenseStorage {
         previousProfileId == status.menuProfileId &&
         previousGeneration == status.menuProfileGeneration?.toString();
     if (!scopeUnchanged) await _delete(_keyAdminSessionToken);
-    await _write(_keyLastSuccessfulCheckAt, DateTime.now().toIso8601String());
   }
 
   static Future<String?> getMenuAccessToken() => _read(_keyMenuAccessToken);

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../main.dart'; // To access navigatorKey
 import 'license_gate.dart';
 import 'license_service.dart';
+import 'license_status.dart';
 import 'update_service.dart';
 import '../menu/menu_service.dart';
 
@@ -25,8 +26,26 @@ class FeatureSyncService with WidgetsBindingObserver {
   /// Easy to adjust polling frequency for sync
   static const Duration featureSyncInterval = Duration(seconds: 30);
 
+  /// Internet is required: once the server could not be reached for this
+  /// long, [connectionLost] covers the kiosk. The license stays active, so the
+  /// cover lifts by itself on the next successful check.
+  static const Duration connectionGrace = Duration(minutes: 5);
+
+  /// True while the kiosk has been unable to reach the license server for
+  /// longer than [connectionGrace].
+  final ValueNotifier<bool> connectionLost = ValueNotifier<bool>(false);
+
+  /// Clock for the grace period (replaced in tests).
+  @visibleForTesting
+  DateTime Function() now = DateTime.now;
+
+  DateTime? _lastSuccessfulCheck;
+
   /// Start periodic background checking and register lifecycle observer
   void start() {
+    // The gate has just validated online, so the grace period starts now.
+    _lastSuccessfulCheck = now();
+    connectionLost.value = false;
     if (!_isObserverRegistered) {
       WidgetsBinding.instance.addObserver(this);
       _isObserverRegistered = true;
@@ -60,17 +79,14 @@ class FeatureSyncService with WidgetsBindingObserver {
 
     try {
       final status = await LicenseService.instance.checkStatus();
+      if (!recordCheckResult(status)) return;
       if (status.active) {
-        // Reuse this single lifecycle/timer lock for menu synchronization.
-        // A menu failure must never revoke or block the already valid license.
-        await MenuService.instance.syncNow(status: status);
+        // The menu sync runs on its own (MenuService allows one at a time):
+        // downloading images on a slow network must not hold this lock and
+        // delay license, maintenance and connection checks.
+        unawaited(MenuService.instance.syncNow(status: status));
       }
       if (!status.active) {
-        // Ağ hatası veya sunucu hatası durumunda kiosk'u kilitleme — sadece gerçek lisans sorunlarında kapat
-        if (status.reason == 'network_error' ||
-            status.reason == 'server_error') {
-          return; // Offline'da veya sunucu kesintilerinde mevcut session'ı koru
-        }
         // License/Trial is invalid or expired! Stop sync and lock application.
         stop();
         _showRevokedNoticeOnGate = status.reason == 'device_revoked';
@@ -81,9 +97,35 @@ class FeatureSyncService with WidgetsBindingObserver {
       }
     } catch (e) {
       debugPrint('FeatureSyncService: Error checking status: $e');
+      recordCheckResult(
+        const LicenseStatus(
+          active: false,
+          mode: LicenseMode.licensed,
+          reason: 'network_error',
+        ),
+      );
     } finally {
       _isSyncing = false;
     }
+  }
+
+  /// Updates [connectionLost] from one check. Returns false when the result
+  /// was a network/server failure, which never locks the license itself.
+  @visibleForTesting
+  bool recordCheckResult(LicenseStatus status) {
+    final unreachable =
+        !status.active &&
+        (status.reason == 'network_error' || status.reason == 'server_error');
+    if (!unreachable) {
+      _lastSuccessfulCheck = now();
+      connectionLost.value = false;
+      return true;
+    }
+    final last = _lastSuccessfulCheck ??= now();
+    if (now().difference(last) > connectionGrace) {
+      connectionLost.value = true;
+    }
+    return false;
   }
 
   Future<bool> _ensureRuntimeKioskIsActive() async {

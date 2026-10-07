@@ -333,6 +333,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     LicenseService.instance.statusNotifier.addListener(
       _handleLicenseStatusChange,
     );
+    FeatureSyncService.instance.connectionLost.addListener(
+      _handleConnectionChange,
+    );
 
     // Load persisted stable IDs first; names remain a one-time legacy fallback.
     final savedWheelIds = _LuuqSettings.instance.wheelItemIds;
@@ -724,6 +727,15 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   /// The text of the closed-screen notice, or null when the kiosk is open.
   ({String title, String body})? _serviceBlockMessage(LicenseStatus status) {
     if (!status.active) return null;
+    if (FeatureSyncService.instance.connectionLost.value) {
+      return (
+        title: tr('İnternet Bağlantısı Yok', 'No Internet Connection'),
+        body: tr(
+          'Kiosk sunucuya bağlanamıyor. Bağlantı geri geldiğinde ekran kendiliğinden açılacak.',
+          'The kiosk cannot reach the server. The screen will reopen by itself when the connection is back.',
+        ),
+      );
+    }
     if (status.maintenanceEnabled) {
       final message = status.maintenanceMessage?.trim() ?? '';
       return (
@@ -759,6 +771,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     LicenseService.instance.statusNotifier.removeListener(
       _handleLicenseStatusChange,
     );
+    FeatureSyncService.instance.connectionLost.removeListener(
+      _handleConnectionChange,
+    );
     MenuService.instance.catalogNotifier.removeListener(
       _handleRemoteMenuChanged,
     );
@@ -788,6 +803,10 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         appLanguageNotifier.value = AppLanguage.tr;
       }
     }
+  }
+
+  void _handleConnectionChange() {
+    if (mounted) setState(() {});
   }
 
   void _handleLanguageChange() {
