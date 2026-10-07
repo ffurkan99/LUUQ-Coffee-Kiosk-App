@@ -49,6 +49,8 @@ class _AdminPinDialogState extends State<_AdminPinDialog> {
           : 'none';
 
       final appVersion = await DeviceIdentityService.getAppVersion();
+      // Proof of the enrolled kiosk; the device ID alone is not enough.
+      final licenseKey = await LicenseStorage.getLicenseKey();
 
       final response = await http
           .post(
@@ -57,6 +59,7 @@ class _AdminPinDialogState extends State<_AdminPinDialog> {
             body: json.encode({
               'device_id': deviceId,
               'device_fingerprint_hash': fingerprint,
+              'license_key': ?licenseKey,
               'license_mode': licenseMode,
               'pin': _pin,
               'app_version': appVersion,

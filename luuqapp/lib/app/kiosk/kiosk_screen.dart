@@ -78,6 +78,17 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       <VideoPlayerController>{};
   int _videoInitGeneration = 0;
   bool _videoUnavailable = false;
+
+  /// A video failure (e.g. a decoder error after the TV wakes from standby)
+  /// is retried after these delays, the last one repeating, instead of
+  /// leaving the idle screen without its video until the app restarts.
+  static const List<Duration> _videoRetryDelays = [
+    Duration(minutes: 1),
+    Duration(minutes: 5),
+    Duration(minutes: 15),
+  ];
+  Timer? _videoRetryTimer;
+  int _videoRetryCount = 0;
   bool _videoFailureLogged = false;
 
   List<Drink> get _filteredDrinks {
@@ -457,6 +468,13 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       final detail = error == null ? '' : ' error=$error';
       debugPrint('[VIDEO] disabled: $reason.$detail');
     }
+    _videoRetryTimer?.cancel();
+    final delay =
+        _videoRetryDelays[min(_videoRetryCount, _videoRetryDelays.length - 1)];
+    _videoRetryCount++;
+    _videoRetryTimer = Timer(delay, () {
+      if (mounted && _videoController == null) unawaited(_initVideo());
+    });
     if (mounted) setState(() {});
   }
 
@@ -575,6 +593,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         return;
       }
 
+      _videoRetryCount = 0;
       setState(() {});
       if (_isAppActive && !MediaQuery.disableAnimationsOf(context)) {
         unawaited(_playVideoIfAllowed(controller));
@@ -773,6 +792,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       activeInstance = null;
     }
     FeatureSyncService.instance.stop();
+    _videoRetryTimer?.cancel();
     LicenseService.instance.statusNotifier.removeListener(
       _handleLicenseStatusChange,
     );

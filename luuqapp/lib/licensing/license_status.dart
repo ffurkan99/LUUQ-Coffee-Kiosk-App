@@ -59,13 +59,21 @@ class LicenseStatus {
     this.minimumAppVersion,
   });
 
+  static Map<String, dynamic>? _optMap(Object? value) =>
+      value is Map ? Map<String, dynamic>.from(value) : null;
+
+  static String? _optString(Object? value) =>
+      value is String ? value : (value is num ? value.toString() : null);
+
   factory LicenseStatus.fromJson(
     Map<String, dynamic> json,
     LicenseMode defaultMode, {
     DateTime? lastCheckedAt,
   }) {
-    final active = json['active'] ?? false;
-    final updateJson = json['update'] as Map<String, dynamic>?;
+    // Typed reads: PHP sends [] for an empty object and may send numbers for
+    // strings; a bad cast here used to throw and turn into "server error".
+    final active = json['active'] == true;
+    final updateJson = _optMap(json['update']);
     final bool updateAvailable =
         updateJson != null &&
         (updateJson['available'] == true ||
@@ -126,14 +134,19 @@ class LicenseStatus {
         : (resolvedMode == LicenseMode.licensed
               ? FeatureFlags.proDefault
               : FeatureFlags.lockedAll);
-    final featuresJson = json['features'] as Map<String, dynamic>?;
+    final featuresJson = _optMap(json['features']);
     String featureSource = 'none';
     FeatureFlags parsedFeatures;
     if (!active) {
       parsedFeatures = FeatureFlags.lockedAll;
       featureSource = 'inactive_locked_all';
     } else if (featuresJson != null && featuresJson.isNotEmpty) {
-      parsedFeatures = FeatureFlags.fromJson(featuresJson, fallback: fallbackFlags);
+      // A key missing from the server's list is off (fail closed); the
+      // server always sends the full list, so this only guards new flags.
+      parsedFeatures = FeatureFlags.fromJson(
+        featuresJson,
+        fallback: FeatureFlags.lockedAll,
+      );
       featureSource = 'backend_features';
     } else {
       parsedFeatures = fallbackFlags;
@@ -171,13 +184,13 @@ class LicenseStatus {
     return LicenseStatus(
       active: active,
       mode: resolvedMode,
-      branchName: json['branch_name'] as String?,
-      customerName: json['customer_name'] as String?,
-      plan: json['plan'] as String?,
-      expiresAt: json['expires_at'] as String?,
-      trialExpiresAt: json['trial_expires_at'] as String?,
+      branchName: _optString(json['branch_name']),
+      customerName: _optString(json['customer_name']),
+      plan: _optString(json['plan']),
+      expiresAt: _optString(json['expires_at']),
+      trialExpiresAt: _optString(json['trial_expires_at']),
       features: parsedFeatures,
-      reason: json['reason'] as String?,
+      reason: _optString(json['reason']),
       lastCheckedAt: lastCheckedAt,
       updateAvailable: updateAvailable,
       latestVersion: latestVersion,

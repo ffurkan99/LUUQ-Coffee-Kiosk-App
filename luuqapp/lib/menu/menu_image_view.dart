@@ -69,7 +69,7 @@ class MenuImageView extends StatelessWidget {
               errorBuilder: nextSource,
             );
     }
-    if (url != null && url.isNotEmpty) {
+    if (url != null && Uri.tryParse(url)?.scheme == 'https') {
       return Image.network(
         url,
         fit: fit,

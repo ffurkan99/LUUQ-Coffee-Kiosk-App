@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../licensing/device_identity_service.dart';
 import '../licensing/license_service.dart';
+import '../licensing/license_storage.dart';
 import '../licensing/license_status.dart';
 import 'analytics_config.dart';
 import 'analytics_event.dart';
@@ -62,6 +63,9 @@ class AnalyticsService {
           await DeviceIdentityService.getDeviceFingerprintHash();
       final deviceModel = await DeviceIdentityService.getDeviceModel();
       final appVersion = await DeviceIdentityService.getAppVersion();
+      // Proof that this is the enrolled kiosk, not just someone who knows
+      // its device ID (the server checks it against the device's license).
+      final licenseKey = await LicenseStorage.getLicenseKey();
       if (kDebugMode) {
         debugPrint('track-event app_version: $appVersion');
       }
@@ -76,6 +80,7 @@ class AnalyticsService {
       final Map<String, dynamic> body = {
         'device_id': deviceId,
         'device_fingerprint_hash': fingerprint,
+        'license_key': ?licenseKey,
         'device_model': deviceModel,
         'device_name': deviceModel,
         'license_mode': licenseMode,

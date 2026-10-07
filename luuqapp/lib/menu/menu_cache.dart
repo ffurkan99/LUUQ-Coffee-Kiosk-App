@@ -187,8 +187,12 @@ class MenuCache {
       if (cachedPath != null) return cachedPath;
     }
 
+    // Menu images come from our server over HTTPS only; anything else could
+    // be swapped in transit.
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'https') return null;
     final response = await _client
-        .get(Uri.parse(url))
+        .get(uri)
         .timeout(const Duration(seconds: 12));
     if (response.statusCode != 200 ||
         response.bodyBytes.isEmpty ||
