@@ -930,7 +930,8 @@ void main() {
         addTearDown(restore);
         await _pumpKioskAtSize(tester, const Size(1920, 1080));
         const longName =
-            'Beyaz Çikolatalı Karamelli Fındıklı Buzlu Latte Grande Special';
+            'Beyaz Çikolatalı Karamelli Fındıklı Tarçınlı Vanilyalı Buzlu '
+            'Latte Grande Special Edition';
         await _setMenuCatalog(
           tester,
           _layoutCatalog([

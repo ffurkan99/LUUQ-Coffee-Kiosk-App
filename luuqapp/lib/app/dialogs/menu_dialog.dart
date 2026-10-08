@@ -873,7 +873,7 @@ class _MenuDialogState extends State<_MenuDialog> {
                   // Name (at most two lines) with its badge right after it.
                   LayoutBuilder(
                     builder: (context, constraints) =>
-                        _buildMenuItemName(item, constraints.maxWidth),
+                        _buildMenuItemName(context, item, constraints.maxWidth),
                   ),
                   // Description
                   if (_menuItemDescription(item).isNotEmpty) ...[
@@ -908,7 +908,6 @@ class _MenuDialogState extends State<_MenuDialog> {
                                   _tagStyles[tag] ?? const Color(0xFFB2BEC3);
                               return Container(
                                 height: _menuTagHeight,
-                                alignment: Alignment.center,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                 ),
@@ -919,13 +918,16 @@ class _MenuDialogState extends State<_MenuDialog> {
                                     color: color.withValues(alpha: 0.4),
                                   ),
                                 ),
-                                child: Text(
-                                  _menuItemTag(item, tag),
-                                  style: TextStyle(
-                                    fontSize: _fsBadge,
-                                    fontWeight: FontWeight.w800,
-                                    color: color,
-                                    letterSpacing: 0.5,
+                                child: Center(
+                                  widthFactor: 1,
+                                  child: Text(
+                                    _menuItemTag(item, tag),
+                                    style: TextStyle(
+                                      fontSize: _fsBadge,
+                                      fontWeight: FontWeight.w800,
+                                      color: color,
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
                                 ),
                               );
@@ -962,16 +964,25 @@ class _MenuDialogState extends State<_MenuDialog> {
 
   /// The card's name: at most two lines, ending in '…' when cut, with the
   /// Popular / Special badge kept right after it.
-  Widget _buildMenuItemName(_MenuItem item, double maxWidth) {
+  Widget _buildMenuItemName(
+    BuildContext context,
+    _MenuItem item,
+    double maxWidth,
+  ) {
     final isPopular = item.tags.contains('Popüler');
     final isSpecial = item.tags.contains('Special');
     final hasBadge = isPopular || isSpecial;
     final badgeLabel = isSpecial ? 'Special' : trMenu('Popüler');
     final textScaler = MediaQuery.textScalerOf(context);
+    // Measured with the font the text is drawn in (the theme's).
+    final inherited = DefaultTextStyle.of(context).style;
     var badgeWidth = 0.0;
     if (hasBadge) {
       final label = TextPainter(
-        text: TextSpan(text: badgeLabel, style: _menuBadgeLabelStyle),
+        text: TextSpan(
+          text: badgeLabel,
+          style: inherited.merge(_menuBadgeLabelStyle),
+        ),
         textDirection: TextDirection.ltr,
         textScaler: textScaler,
       )..layout();
@@ -981,7 +992,7 @@ class _MenuDialogState extends State<_MenuDialog> {
     }
     final name = fitNameBeforeBadge(
       name: _menuItemName(item),
-      style: _menuItemNameStyle,
+      style: inherited.merge(_menuItemNameStyle),
       maxWidth: maxWidth,
       badgeWidth: badgeWidth,
       textScaler: textScaler,
