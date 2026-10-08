@@ -4,17 +4,6 @@ part of '../../main.dart';
 /// stutters while a dialog is open; the dark scrim stays.
 const double _kioskDialogBlur = 10;
 
-/// How many customer dialogs are open over the kiosk. While any is, the
-/// kiosk behind holds still (its animations and video pause): it is blurred
-/// anyway, and a changing background would make the blur recompute every
-/// frame. Counted by the route's own lifetime, so it can never get stuck:
-/// [Route.dispose] runs however the route goes (pop, popUntil, removal).
-final ValueNotifier<int> _kioskDialogDepth = ValueNotifier<int>(0);
-
-/// Test hook: how many customer dialogs hold the kiosk still.
-@visibleForTesting
-int debugKioskDialogDepth() => _kioskDialogDepth.value;
-
 /// A light spring: the dialog settles with one small (~4 %) overshoot.
 class _KioskSpringCurve extends Curve {
   const _KioskSpringCurve();
@@ -50,19 +39,6 @@ class _KioskDialogRoute<T> extends PageRoute<T> {
   final bool dismissible;
   final bool instant;
   final double scrimOpacity;
-
-  @override
-  void install() {
-    super.install();
-    _kioskDialogDepth.value++;
-  }
-
-  @override
-  void dispose() {
-    // A new kiosk screen resets the count; never go below it.
-    if (_kioskDialogDepth.value > 0) _kioskDialogDepth.value--;
-    super.dispose();
-  }
 
   @override
   bool get opaque => false;

@@ -216,9 +216,6 @@ extension _KioskSocial on _CafeKioskScreenState {
   }
 
   void _showLargeQR(String assetPath, String title) {
-    // Blurs the kiosk like the customer dialogs, so it holds the kiosk still
-    // too (see _kioskDialogDepth).
-    _kioskDialogDepth.value++;
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -302,9 +299,7 @@ extension _KioskSocial on _CafeKioskScreenState {
           ),
         );
       },
-    ).whenComplete(() {
-      if (_kioskDialogDepth.value > 0) _kioskDialogDepth.value--;
-    });
+    );
   }
 
   Widget _buildSocialArea() {

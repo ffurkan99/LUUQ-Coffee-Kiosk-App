@@ -475,9 +475,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     );
     appLanguageNotifier.addListener(_handleLanguageChange);
     appThemeNotifier.addListener(_handleThemeChange);
-    // A new kiosk screen has no dialog over it.
-    _kioskDialogDepth.value = 0;
-    _kioskDialogDepth.addListener(_handleDialogDepthChange);
     appVolumeNotifier.addListener(_handleVolumeChange);
     _spinController = AnimationController(
       vsync: this,
@@ -621,9 +618,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   void _syncMotionPreference() {
     final controller = _videoController;
     _updatePulse();
-    if (MediaQuery.disableAnimationsOf(context) ||
-        !_isAppActive ||
-        _kioskDialogDepth.value > 0) {
+    if (MediaQuery.disableAnimationsOf(context) || !_isAppActive) {
       if (controller != null) {
         unawaited(_pauseVideoIfReady(controller));
       }
@@ -639,21 +634,13 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
   /// hold still while the wheel turns, so its frames would be wasted).
   void _updatePulse() {
     final reduced = MediaQuery.disableAnimationsOf(context);
-    final run =
-        !reduced &&
-        _isAppActive &&
-        !_spinController.isAnimating &&
-        _kioskDialogDepth.value == 0;
+    final run = !reduced && _isAppActive && !_spinController.isAnimating;
     if (run) {
       if (!_pulseController.isAnimating) _pulseController.repeat(reverse: true);
     } else {
       _pulseController.stop(canceled: false);
       if (reduced) _pulseController.value = 0.5;
     }
-  }
-
-  void _handleDialogDepthChange() {
-    if (mounted) _syncMotionPreference();
   }
 
   void _handleSpinStatus(AnimationStatus status) {
@@ -936,7 +923,6 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     );
     appLanguageNotifier.removeListener(_handleLanguageChange);
     appThemeNotifier.removeListener(_handleThemeChange);
-    _kioskDialogDepth.removeListener(_handleDialogDepthChange);
     appVolumeNotifier.removeListener(_handleVolumeChange);
     WidgetsBinding.instance.removeObserver(this);
     _videoInitGeneration++;
@@ -1208,28 +1194,12 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                       key: const ValueKey(
                                                         'main_layout',
                                                       ),
-                                                      // Holds still behind an
-                                                      // open customer dialog.
-                                                      child: ValueListenableBuilder<int>(
-                                                        valueListenable:
-                                                            _kioskDialogDepth,
-                                                        builder:
-                                                            (
-                                                              context,
-                                                              depth,
-                                                              child,
-                                                            ) => TickerMode(
-                                                              enabled:
-                                                                  depth == 0,
-                                                              child: child!,
-                                                            ),
-                                                        child:
-                                                            _buildCanvasMainLayout(
-                                                              available,
-                                                              isSpinning,
-                                                              virtualWidthDynamic,
-                                                            ),
-                                                      ),
+                                                      child:
+                                                          _buildCanvasMainLayout(
+                                                            available,
+                                                            isSpinning,
+                                                            virtualWidthDynamic,
+                                                          ),
                                                     ),
                                             ),
                                           ),
