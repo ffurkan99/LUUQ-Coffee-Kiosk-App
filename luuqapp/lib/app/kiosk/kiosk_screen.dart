@@ -1315,7 +1315,10 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                                                               0.5,
                                                           child: IgnorePointer(
                                                             child: Transform.rotate(
-                                                              angle: 0.10,
+                                                              // Tilted to sit on
+                                                              // the Q (0.10 for
+                                                              // the classic hat).
+                                                              angle: 0.16,
                                                               child: const CustomPaint(
                                                                 painter:
                                                                     _SantaHatPainter(),
