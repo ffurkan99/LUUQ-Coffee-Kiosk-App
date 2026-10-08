@@ -111,12 +111,21 @@ class _BouncyButtonState extends State<BouncyButton>
   }
 }
 
+/// The breathing arrows around the wheel. [animation] repaints the painter
+/// directly, without rebuilding any widget.
 class _CurvedArrowsPainter extends CustomPainter {
-  final double animationValue;
-  _CurvedArrowsPainter({required this.animationValue});
+  _CurvedArrowsPainter({required this.animation}) : super(repaint: animation);
+
+  final Animation<double> animation;
+  final Paint _arcPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2.5
+    ..strokeCap = StrokeCap.butt;
+  final Paint _headPaint = Paint()..style = PaintingStyle.fill;
 
   @override
   void paint(Canvas canvas, Size size) {
+    final animationValue = animation.value;
     // Synchronize opacity and a subtle radial pulse for a true 'breathing' feel
     final double baseRadius = size.width * 0.48;
     final double radius =
@@ -130,15 +139,8 @@ class _CurvedArrowsPainter extends CustomPainter {
       alpha: 0.10 + (animationValue * 0.30),
     );
 
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.butt;
-
-    final arrowHeadPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
+    final paint = _arcPaint..color = color;
+    final arrowHeadPaint = _headPaint..color = color;
 
     // 1. Left-side curved arrow (around 9-10 o'clock)
     const double startAngle1 = -pi * 0.60;
@@ -177,7 +179,7 @@ class _CurvedArrowsPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CurvedArrowsPainter oldDelegate) =>
-      oldDelegate.animationValue != animationValue;
+      !identical(oldDelegate.animation, animation);
 }
 
 class _RotatingIcon extends StatefulWidget {
@@ -225,9 +227,11 @@ class _RotatingIconState extends State<_RotatingIcon>
 
   @override
   Widget build(BuildContext context) {
-    return RotationTransition(
-      turns: _controller,
-      child: Icon(widget.icon, color: widget.color, size: widget.size),
+    return RepaintBoundary(
+      child: RotationTransition(
+        turns: _controller,
+        child: Icon(widget.icon, color: widget.color, size: widget.size),
+      ),
     );
   }
 }

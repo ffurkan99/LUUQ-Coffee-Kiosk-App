@@ -113,23 +113,26 @@ extension _KioskOverlays on _CafeKioskScreenState {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Pulsing Logo
-            AnimatedBuilder(
-              animation: _pulseController,
-              builder: (context, child) {
-                final scale = 0.96 + (_pulseController.value * 0.08);
-                return Transform.scale(scale: scale, child: child);
-              },
-              child: Image.asset(
-                'assets/logo.png',
-                width: 250,
-                height: 250,
-                cacheWidth: _logoCacheWidth,
-                fit: BoxFit.contain,
-                errorBuilder: (c, e, s) => const Icon(
-                  Icons.restaurant_menu_rounded,
-                  color: _gold,
-                  size: 100,
+            // Pulsing Logo (own layer: the idle screen is not redrawn per
+            // frame).
+            RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, child) {
+                  final scale = 0.96 + (_pulseController.value * 0.08);
+                  return Transform.scale(scale: scale, child: child);
+                },
+                child: Image.asset(
+                  'assets/logo.png',
+                  width: 250,
+                  height: 250,
+                  cacheWidth: _logoCacheWidth,
+                  fit: BoxFit.contain,
+                  errorBuilder: (c, e, s) => const Icon(
+                    Icons.restaurant_menu_rounded,
+                    color: _gold,
+                    size: 100,
+                  ),
                 ),
               ),
             ),

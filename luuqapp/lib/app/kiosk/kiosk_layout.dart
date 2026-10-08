@@ -30,50 +30,55 @@ extension _KioskLayout on _CafeKioskScreenState {
           top: 32.0,
           bottom: 64.0, // alt pay birakildi
           width: sideWidth,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: headerSlotHeight),
-              const SizedBox(height: rowGap),
-              Expanded(
-                flex: filterSlotHeight.toInt(),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: SizedBox(
-                    width: sideWidth,
-                    height: filterSlotHeight,
-                    child: _buildBaristaRecommendation(),
+          // Each area repaints on its own: the pulse and the effects in one
+          // must not redraw the shadowed cards of the others every frame.
+          child: RepaintBoundary(
+            key: const ValueKey('kiosk_left_column'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: headerSlotHeight),
+                const SizedBox(height: rowGap),
+                Expanded(
+                  flex: filterSlotHeight.toInt(),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: sideWidth,
+                      height: filterSlotHeight,
+                      child: _buildBaristaRecommendation(),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: rowGap),
-              Expanded(
-                flex: billCardHeight.toInt(),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: SizedBox(
-                    width: sideWidth,
-                    height: billCardHeight,
-                    child: _buildBillGameCard(),
+                const SizedBox(height: rowGap),
+                Expanded(
+                  flex: billCardHeight.toInt(),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: sideWidth,
+                      height: billCardHeight,
+                      child: _buildBillGameCard(),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: rowGap),
-              Expanded(
-                flex: bottomSlotHeight.toInt(),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.bottomCenter,
-                  child: SizedBox(
-                    width: sideWidth,
-                    height: bottomSlotHeight,
-                    child: _buildSocialArea(),
+                const SizedBox(height: rowGap),
+                Expanded(
+                  flex: bottomSlotHeight.toInt(),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.bottomCenter,
+                    child: SizedBox(
+                      width: sideWidth,
+                      height: bottomSlotHeight,
+                      child: _buildSocialArea(),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
 
@@ -83,7 +88,10 @@ extension _KioskLayout on _CafeKioskScreenState {
           right: 12.0 + sideWidth + columnGap,
           top: 32.0,
           bottom: 64.0,
-          child: _buildCenterArea(available, isSpinning),
+          child: RepaintBoundary(
+            key: const ValueKey('kiosk_center_area'),
+            child: _buildCenterArea(available, isSpinning),
+          ),
         ),
 
         // RIGHT COLUMN
@@ -92,50 +100,53 @@ extension _KioskLayout on _CafeKioskScreenState {
           top: 32.0,
           bottom: 64.0, // alt pay birakildi
           width: sideWidth,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: headerSlotHeight),
-              const SizedBox(height: rowGap),
-              Expanded(
-                flex: filterSlotHeight.toInt(),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: SizedBox(
-                    width: sideWidth,
-                    height: filterSlotHeight,
-                    child: _buildRightTopBlankCard(isSpinning),
+          child: RepaintBoundary(
+            key: const ValueKey('kiosk_right_column'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: headerSlotHeight),
+                const SizedBox(height: rowGap),
+                Expanded(
+                  flex: filterSlotHeight.toInt(),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: sideWidth,
+                      height: filterSlotHeight,
+                      child: _buildRightTopBlankCard(isSpinning),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: rowGap),
-              Expanded(
-                flex: billCardHeight.toInt(),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: SizedBox(
-                    width: sideWidth,
-                    height: billCardHeight,
-                    child: _buildResultSwitcher(),
+                const SizedBox(height: rowGap),
+                Expanded(
+                  flex: billCardHeight.toInt(),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: sideWidth,
+                      height: billCardHeight,
+                      child: _buildResultSwitcher(),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: rowGap),
-              Expanded(
-                flex: bottomSlotHeight.toInt(),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.bottomCenter,
-                  child: SizedBox(
-                    width: sideWidth,
-                    height: bottomSlotHeight,
-                    child: _buildMenuButton(),
+                const SizedBox(height: rowGap),
+                Expanded(
+                  flex: bottomSlotHeight.toInt(),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.bottomCenter,
+                    child: SizedBox(
+                      width: sideWidth,
+                      height: bottomSlotHeight,
+                      child: _buildMenuButton(),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -143,22 +154,25 @@ extension _KioskLayout on _CafeKioskScreenState {
   }
 
   Widget _buildResultSwitcher() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 800),
-      switchInCurve: Curves.easeOutBack,
-      switchOutCurve: Curves.easeIn,
-      transitionBuilder: (child, animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.95, end: 1.0).animate(animation),
-            child: child,
-          ),
-        );
-      },
-      child: _showResult && _selectedDrink != null
-          ? _buildResultArea(_selectedDrink!)
-          : _buildEmptyResultArea(),
+    // Its scale-and-fade transition repaints only this card.
+    return RepaintBoundary(
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 800),
+        switchInCurve: Curves.easeOutBack,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.95, end: 1.0).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: _showResult && _selectedDrink != null
+            ? _buildResultArea(_selectedDrink!)
+            : _buildEmptyResultArea(),
+      ),
     );
   }
 
@@ -343,16 +357,14 @@ extension _KioskLayout on _CafeKioskScreenState {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) {
-              final op = 0.3 + (_pulseController.value * 0.4);
-              return Icon(
-                Icons.coffee_rounded,
-                size: isCompact ? 36 : 48,
-                color: _gold.withValues(alpha: op.clamp(0.0, 1.0)),
-              );
-            },
+          // Fades as a layer: no rebuild or repaint per frame.
+          FadeTransition(
+            opacity: _pulseController.drive(Tween(begin: 0.3, end: 0.7)),
+            child: Icon(
+              Icons.coffee_rounded,
+              size: isCompact ? 36 : 48,
+              color: _gold,
+            ),
           ),
           SizedBox(height: isCompact ? 8 : 12),
           Text(

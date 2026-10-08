@@ -1788,24 +1788,27 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Outer Glow Pulse
-                    AnimatedBuilder(
-                      animation: _pulseController,
-                      builder: (context, child) {
-                        final opacity = isSpinning
-                            ? 0.8
-                            : 0.4 +
-                                  (_pulseController.value *
-                                      0.4 *
-                                      pulseMultiplier);
-                        final scale = isSpinning
-                            ? 1.0
-                            : 1.0 +
-                                  (_pulseController.value *
-                                      0.05 *
-                                      pulseMultiplier);
-                        return Transform.scale(
-                          scale: scale,
+                    // Outer Glow Pulse: scaled and faded as layers, so the
+                    // pulse never rebuilds or repaints it.
+                    RepaintBoundary(
+                      child: ScaleTransition(
+                        scale: isSpinning
+                            ? const AlwaysStoppedAnimation(1.0)
+                            : _pulseController.drive(
+                                Tween(
+                                  begin: 1.0,
+                                  end: 1.0 + 0.05 * pulseMultiplier,
+                                ),
+                              ),
+                        child: FadeTransition(
+                          opacity: isSpinning
+                              ? const AlwaysStoppedAnimation(0.8)
+                              : _pulseController.drive(
+                                  Tween(
+                                    begin: 0.4,
+                                    end: 0.4 + 0.4 * pulseMultiplier,
+                                  ),
+                                ),
                           child: Container(
                             width: wheelSize * 1.15,
                             height: wheelSize * 1.15,
@@ -1813,31 +1816,26 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
                                 colors: [
-                                  _gold.withValues(
-                                    alpha: 0.15 * opacity.clamp(0.0, 1.0),
-                                  ),
+                                  _gold.withValues(alpha: 0.15),
                                   _gold.withValues(alpha: 0.0),
                                 ],
                                 stops: const [0.65, 1.0],
                               ),
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      ),
                     ),
 
                     // Curved Arrows
                     if (!isSpinning && !_isDragging)
-                      AnimatedBuilder(
-                        animation: _pulseController,
-                        builder: (context, child) {
-                          return CustomPaint(
-                            size: Size.square(wheelSize * 1.12),
-                            painter: _CurvedArrowsPainter(
-                              animationValue: _pulseController.value,
-                            ),
-                          );
-                        },
+                      RepaintBoundary(
+                        child: CustomPaint(
+                          size: Size.square(wheelSize * 1.12),
+                          painter: _CurvedArrowsPainter(
+                            animation: _pulseController,
+                          ),
+                        ),
                       ),
 
                     // The Actual Wheel
@@ -1901,122 +1899,126 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                           },
                           child: AnimatedBuilder(
                             animation: _spinController,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                CustomPaint(
-                                  painter: _DrinkWheelPainter(
-                                    drinks: available,
-                                    selectedDrink: _selectedDrink,
-                                    showResult: _showResult,
+                            // Recorded once: a spin frame only rotates it.
+                            child: RepaintBoundary(
+                              key: const ValueKey('kiosk_wheel_face'),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  CustomPaint(
+                                    painter: _DrinkWheelPainter(
+                                      drinks: available,
+                                      selectedDrink: _selectedDrink,
+                                      showResult: _showResult,
+                                    ),
                                   ),
-                                ),
-                                ...available.asMap().entries.map((entry) {
-                                  final i = entry.key;
-                                  final drink = entry.value;
-                                  final sweep = 2 * pi / available.length;
-                                  final startAngle = -pi / 2 + i * sweep;
-                                  final labelAngle = startAngle + sweep / 2;
+                                  ...available.asMap().entries.map((entry) {
+                                    final i = entry.key;
+                                    final drink = entry.value;
+                                    final sweep = 2 * pi / available.length;
+                                    final startAngle = -pi / 2 + i * sweep;
+                                    final labelAngle = startAngle + sweep / 2;
 
-                                  // Rotate the item so its top points outward
-                                  // At -pi/2 (top), we want 0 rotation so it is upright.
-                                  final rotationAngle = labelAngle + pi / 2;
+                                    // Rotate the item so its top points outward
+                                    // At -pi/2 (top), we want 0 rotation so it is upright.
+                                    final rotationAngle = labelAngle + pi / 2;
 
-                                  final isSelected =
-                                      _showResult && drink == _selectedDrink;
+                                    final isSelected =
+                                        _showResult && drink == _selectedDrink;
 
-                                  return Transform.rotate(
-                                    angle: rotationAngle,
-                                    child: Align(
-                                      alignment: Alignment.topCenter,
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(top: 20),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            // Drink Image or Icon
-                                            Container(
-                                              width: 68,
-                                              height: 68,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                border: Border.all(
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.15),
-                                                  width: 1.5,
-                                                ),
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.1,
-                                                ),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black
-                                                        .withValues(alpha: 0.3),
-                                                    blurRadius: 4,
+                                    return Transform.rotate(
+                                      angle: rotationAngle,
+                                      child: Align(
+                                        alignment: Alignment.topCenter,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(top: 20),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              // Drink Image or Icon
+                                              Container(
+                                                width: 68,
+                                                height: 68,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.white
+                                                        .withValues(alpha: 0.15),
+                                                    width: 1.5,
                                                   ),
-                                                ],
-                                              ),
-                                              clipBehavior: Clip.antiAlias,
-                                              child: _buildMenuImage(
-                                                fallbackIcon: drink.icon,
-                                                assetPath: drink.imagePath,
-                                                remoteImageUrl:
-                                                    drink.remoteImageUrl,
-                                                transparentAssetPath:
-                                                    drink
-                                                        .transparentImagePath ??
-                                                    (drink.imagePath
-                                                                ?.startsWith(
-                                                                  'assets/',
-                                                                ) ==
-                                                            true
-                                                        ? _wheelImagePath(
-                                                            drink.imagePath!,
-                                                          )
-                                                        : null),
-                                                transparentRemoteImageUrl: drink
-                                                    .remoteTransparentImageUrl,
-                                                preferTransparent: true,
-                                                cacheWidth: 136,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            // Tangential (MERKEZE DİK) Text
-                                            SizedBox(
-                                              width: 110,
-                                              child: Text(
-                                                displayUpper(drink.shortName),
-                                                textAlign: TextAlign.center,
-                                                style: TextStyle(
-                                                  color: isSelected
-                                                      ? Colors.white
-                                                      : Colors.white.withValues(
-                                                          alpha: 0.95,
-                                                        ),
-                                                  fontSize: isSelected
-                                                      ? 15
-                                                      : 14,
-                                                  fontWeight: isSelected
-                                                      ? FontWeight.w900
-                                                      : FontWeight.w800,
-                                                  letterSpacing: 0.5,
-                                                  height: 1.1,
-                                                  shadows: [
-                                                    const Shadow(
-                                                      color: Colors.black87,
+                                                  color: Colors.black.withValues(
+                                                    alpha: 0.1,
+                                                  ),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withValues(alpha: 0.3),
                                                       blurRadius: 4,
                                                     ),
                                                   ],
                                                 ),
+                                                clipBehavior: Clip.antiAlias,
+                                                child: _buildMenuImage(
+                                                  fallbackIcon: drink.icon,
+                                                  assetPath: drink.imagePath,
+                                                  remoteImageUrl:
+                                                      drink.remoteImageUrl,
+                                                  transparentAssetPath:
+                                                      drink
+                                                          .transparentImagePath ??
+                                                      (drink.imagePath
+                                                                  ?.startsWith(
+                                                                    'assets/',
+                                                                  ) ==
+                                                              true
+                                                          ? _wheelImagePath(
+                                                              drink.imagePath!,
+                                                            )
+                                                          : null),
+                                                  transparentRemoteImageUrl: drink
+                                                      .remoteTransparentImageUrl,
+                                                  preferTransparent: true,
+                                                  cacheWidth: 136,
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                              const SizedBox(height: 8),
+                                              // Tangential (MERKEZE DİK) Text
+                                              SizedBox(
+                                                width: 110,
+                                                child: Text(
+                                                  displayUpper(drink.shortName),
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    color: isSelected
+                                                        ? Colors.white
+                                                        : Colors.white.withValues(
+                                                            alpha: 0.95,
+                                                          ),
+                                                    fontSize: isSelected
+                                                        ? 15
+                                                        : 14,
+                                                    fontWeight: isSelected
+                                                        ? FontWeight.w900
+                                                        : FontWeight.w800,
+                                                    letterSpacing: 0.5,
+                                                    height: 1.1,
+                                                    shadows: [
+                                                      const Shadow(
+                                                        color: Colors.black87,
+                                                        blurRadius: 4,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  );
-                                }),
-                              ],
+                                    );
+                                  }),
+                                ],
+                              ),
                             ),
                             builder: (context, child) {
                               final double angle =
@@ -2116,59 +2118,61 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
         SizedBox(height: isCompact ? 12 : 24),
 
-        // Large Spin Button
-        AnimatedBuilder(
-          animation: _pulseController,
-          builder: (context, child) {
-            final scale = isSpinning
-                ? 1.0
-                : 1.0 + (_pulseController.value * 0.02 * pulseMultiplier);
-            return Transform.scale(scale: scale, child: child);
-          },
-          child: RepaintBoundary(
-            child: BouncyButton(
-              onTap: isSpinning ? null : _spinWheel,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SizedBox(
-                    height: isCompact ? 62 : 88,
-                    width: min(constraints.maxWidth, isCompact ? 320 : 380),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: isSpinning
-                            ? _surface.withValues(alpha: 0.8)
-                            : _gold,
-                        borderRadius: BorderRadius.circular(
-                          isCompact ? 24 : 44,
+        // Large Spin Button (its pulse repaints only itself)
+        RepaintBoundary(
+          child: AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              final scale = isSpinning
+                  ? 1.0
+                  : 1.0 + (_pulseController.value * 0.02 * pulseMultiplier);
+              return Transform.scale(scale: scale, child: child);
+            },
+            child: RepaintBoundary(
+              child: BouncyButton(
+                onTap: isSpinning ? null : _spinWheel,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SizedBox(
+                      height: isCompact ? 62 : 88,
+                      width: min(constraints.maxWidth, isCompact ? 320 : 380),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: isSpinning
+                              ? _surface.withValues(alpha: 0.8)
+                              : _gold,
+                          borderRadius: BorderRadius.circular(
+                            isCompact ? 24 : 44,
+                          ),
+                          boxShadow: isSpinning
+                              ? []
+                              : [
+                                  BoxShadow(
+                                    color: _gold.withValues(alpha: 0.6),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
                         ),
-                        boxShadow: isSpinning
-                            ? []
-                            : [
-                                BoxShadow(
-                                  color: _gold.withValues(alpha: 0.6),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          isSpinning
-                              ? tr('SEÇİLİYOR...', 'SELECTING...')
-                              : (_showResult
-                                    ? tr('TEKRAR ÇEVİR', 'SPIN AGAIN')
-                                    : tr('ÇARKI ÇEVİR', 'SPIN THE WHEEL')),
-                          style: TextStyle(
-                            color: isSpinning ? Colors.white54 : _bgDark,
-                            fontSize: isCompact ? 20 : 32,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: isCompact ? 0.8 : 2,
+                        child: Center(
+                          child: Text(
+                            isSpinning
+                                ? tr('SEÇİLİYOR...', 'SELECTING...')
+                                : (_showResult
+                                      ? tr('TEKRAR ÇEVİR', 'SPIN AGAIN')
+                                      : tr('ÇARKI ÇEVİR', 'SPIN THE WHEEL')),
+                            style: TextStyle(
+                              color: isSpinning ? Colors.white54 : _bgDark,
+                              fontSize: isCompact ? 20 : 32,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: isCompact ? 0.8 : 2,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ),

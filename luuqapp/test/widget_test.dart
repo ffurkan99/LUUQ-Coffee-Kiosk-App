@@ -1037,6 +1037,43 @@ void main() {
       });
     }
   });
+
+  group('performance', () {
+    setUp(() => GlobalDialogTracker.isCustomerDialogOpen = false);
+    tearDown(_disableLicensedKiosk);
+
+    // The center area only composites its children's layers each pulse
+    // frame; what it holds is drawn in these boundaries.
+    const areas = [
+      'kiosk_left_column',
+      'kiosk_right_column',
+      'kiosk_wheel_face',
+    ];
+
+    int paints(WidgetTester tester, String key) {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(ValueKey(key)),
+      );
+      return boundary.debugSymmetricPaintCount +
+          boundary.debugAsymmetricPaintCount;
+    }
+
+    testWidgets('the pulse repaints only its own layers', (tester) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(tester, const Size(1920, 1080));
+      await _wakeKiosk(tester, 'ÇARKI ÇEVİR');
+      await _pumpFrames(tester, const Duration(seconds: 2));
+
+      final before = {for (final key in areas) key: paints(tester, key)};
+      await _pumpFrames(tester, const Duration(milliseconds: 500));
+      for (final key in areas) {
+        expect(paints(tester, key), before[key], reason: key);
+      }
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
+  });
 }
 
 /// A one-category server menu of [items] (name, price, tags), for layout
