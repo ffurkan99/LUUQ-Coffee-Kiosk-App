@@ -13,7 +13,6 @@ import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:http/http.dart' as http;
 
 import 'licensing/license_gate.dart';
 import 'licensing/license_service.dart';
@@ -30,6 +29,7 @@ import 'menu/menu_service.dart';
 import 'menu/menu_image_view.dart';
 import 'analytics/analytics_service.dart';
 import 'analytics/analytics_event.dart';
+import 'net/luuq_http.dart';
 import 'src/menu/name_fit.dart';
 import 'src/who_pays/lottery_machine_view.dart';
 import 'src/who_pays/lottery_simulation.dart';

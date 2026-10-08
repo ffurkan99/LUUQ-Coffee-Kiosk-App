@@ -52,21 +52,19 @@ class _AdminPinDialogState extends State<_AdminPinDialog> {
       // Proof of the enrolled kiosk; the device ID alone is not enough.
       final licenseKey = await LicenseStorage.getLicenseKey();
 
-      final response = await http
-          .post(
-            Uri.parse(LicenseConfig.verifyAdminPinUrl),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode({
-              'device_id': deviceId,
-              'device_fingerprint_hash': fingerprint,
-              'license_key': ?licenseKey,
-              'license_mode': licenseMode,
-              'pin': _pin,
-              'app_version': appVersion,
-              'platform': Platform.operatingSystem.toLowerCase(),
-            }),
-          )
-          .timeout(LicenseConfig.apiTimeout);
+      final response = await luuqPost(
+        Uri.parse(LicenseConfig.verifyAdminPinUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'device_id': deviceId,
+          'device_fingerprint_hash': fingerprint,
+          'license_key': ?licenseKey,
+          'license_mode': licenseMode,
+          'pin': _pin,
+          'app_version': appVersion,
+          'platform': Platform.operatingSystem.toLowerCase(),
+        }),
+      ).timeout(LicenseConfig.apiTimeout);
 
       if (!mounted) return;
 

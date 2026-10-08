@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../licensing/device_identity_service.dart';
 import '../licensing/license_service.dart';
 import '../licensing/license_storage.dart';
 import '../licensing/license_status.dart';
+import '../net/luuq_http.dart';
 import 'analytics_config.dart';
 import 'analytics_event.dart';
 import 'analytics_queue.dart';
@@ -194,13 +194,11 @@ class AnalyticsService {
           'screen=${entry.payload['screen']}, queued=$queued',
         );
       }
-      final response = await http
-          .post(
-            Uri.parse(AnalyticsConfig.trackEventUrl),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode(body),
-          )
-          .timeout(AnalyticsConfig.apiTimeout);
+      final response = await luuqPost(
+        Uri.parse(AnalyticsConfig.trackEventUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(body),
+      ).timeout(AnalyticsConfig.apiTimeout);
       if (kDebugMode) {
         debugPrint('Analytics response code: ${response.statusCode}');
       }

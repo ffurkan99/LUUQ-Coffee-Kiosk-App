@@ -12,6 +12,7 @@ import '../licensing/license_service.dart';
 import '../licensing/license_status.dart';
 import '../licensing/license_storage.dart';
 import 'menu_cache.dart';
+import '../net/luuq_http.dart';
 import 'menu_models.dart';
 
 /// Outcome of a local wheel/barista change, shown to the admin.
@@ -276,13 +277,11 @@ class MenuService {
   /// image cleanup never removes files that are still on screen.
   void markDisplayed(MenuCatalog? catalog) => _displayedCatalog = catalog;
 
-  Future<http.Response> _postMenu(Map<String, dynamic> body) => http
-      .post(
-        Uri.parse(LicenseConfig.menuUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      )
-      .timeout(const Duration(seconds: 12));
+  Future<http.Response> _postMenu(Map<String, dynamic> body) => luuqPost(
+    Uri.parse(LicenseConfig.menuUrl),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode(body),
+  ).timeout(const Duration(seconds: 12));
 
   /// Image downloads run [_imageDownloadConcurrency] at a time: one by one, a
   /// new catalog on a slow network took minutes (two images per item, each up
@@ -541,21 +540,19 @@ class MenuService {
     final deviceId = await DeviceIdentityService.getDeviceId();
     final fingerprint = await DeviceIdentityService.getDeviceFingerprintHash();
 
-    Future<http.Response> post(String accessToken) => http
-        .post(
-          Uri.parse(LicenseConfig.menuConfigUrl),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'domain': domain,
-            ...values,
-            'idempotency_key': idempotencyKey,
-            'device_id': deviceId,
-            'fingerprint': fingerprint,
-            'menu_access_token': accessToken,
-            'admin_session_token': adminToken,
-          }),
-        )
-        .timeout(const Duration(seconds: 12));
+    Future<http.Response> post(String accessToken) => luuqPost(
+      Uri.parse(LicenseConfig.menuConfigUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'domain': domain,
+        ...values,
+        'idempotency_key': idempotencyKey,
+        'device_id': deviceId,
+        'fingerprint': fingerprint,
+        'menu_access_token': accessToken,
+        'admin_session_token': adminToken,
+      }),
+    ).timeout(const Duration(seconds: 12));
 
     try {
       final accessToken = await LicenseStorage.getMenuAccessToken();

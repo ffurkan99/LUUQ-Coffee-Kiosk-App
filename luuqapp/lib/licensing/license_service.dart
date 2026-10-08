@@ -10,6 +10,7 @@ import 'feature_flags.dart';
 import 'license_config.dart';
 import 'license_status.dart';
 import 'license_storage.dart';
+import '../net/luuq_http.dart';
 
 class LicenseService {
   static final LicenseService instance = LicenseService._();
@@ -134,13 +135,11 @@ class LicenseService {
         );
       }
 
-      final response = await http
-          .post(
-            Uri.parse(LicenseConfig.validateLicenseUrl),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode(body),
-          )
-          .timeout(LicenseConfig.apiTimeout);
+      final response = await luuqPost(
+        Uri.parse(LicenseConfig.validateLicenseUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(body),
+      ).timeout(LicenseConfig.apiTimeout);
 
       if (response.statusCode == 200) {
         final data = _decodeExpectedLicenseResponse(response.body);
@@ -264,13 +263,11 @@ class LicenseService {
         );
       }
 
-      final response = await http
-          .post(
-            Uri.parse(LicenseConfig.checkStatusUrl),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode(body),
-          )
-          .timeout(LicenseConfig.apiTimeout);
+      final response = await luuqPost(
+        Uri.parse(LicenseConfig.checkStatusUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(body),
+      ).timeout(LicenseConfig.apiTimeout);
 
       // The current LUUQ backend reports authoritative inactive license
       // states with HTTP 400. Accept only a strict, known inactive payload,
