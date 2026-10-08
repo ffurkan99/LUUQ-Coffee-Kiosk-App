@@ -30,6 +30,7 @@ import 'menu/menu_service.dart';
 import 'menu/menu_image_view.dart';
 import 'analytics/analytics_service.dart';
 import 'analytics/analytics_event.dart';
+import 'src/menu/name_fit.dart';
 import 'src/who_pays/lottery_machine_view.dart';
 import 'src/who_pays/lottery_simulation.dart';
 import 'src/wheel/wheel_pointer_simulation.dart';

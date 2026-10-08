@@ -918,6 +918,69 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await _pumpFrames(tester, const Duration(milliseconds: 300));
     });
+
+    for (final language in AppLanguage.values) {
+      testWidgets('a long name and many tags fit the menu card ($language)', (
+        tester,
+      ) async {
+        _enableLicensedKiosk();
+        appLanguageNotifier.value = language;
+        addTearDown(() => MenuService.instance.catalogNotifier.value = null);
+        final (overflows, restore) = _collectOverflows();
+        addTearDown(restore);
+        await _pumpKioskAtSize(tester, const Size(1920, 1080));
+        const longName =
+            'Beyaz Çikolatalı Karamelli Fındıklı Buzlu Latte Grande Special';
+        await _setMenuCatalog(
+          tester,
+          _layoutCatalog([
+            (
+              name: longName,
+              price: '1.250₺ / 1.450₺',
+              tags: ['Popüler', 'Soğuk', 'Sütlü', 'Tatlı', 'Kafeinli', 'Yeni'],
+              description:
+                  'Espresso, beyaz çikolata, karamel ve fındık şurubu, süt ve '
+                  'bol buz ile hazırlanan, üzeri krema ile süslenen bir içecek.',
+            ),
+            (name: 'Latte', price: '185₺ / 205₺', tags: [], description: ''),
+          ]),
+        );
+        await _wakeKiosk(
+          tester,
+          language == AppLanguage.tr ? 'TÜM MENÜYÜ İNCELE' : 'BROWSE FULL MENU',
+        );
+        await tester.tap(
+          find.text(
+            language == AppLanguage.tr
+                ? 'TÜM MENÜYÜ İNCELE'
+                : 'BROWSE FULL MENU',
+          ),
+        );
+        await _pumpFrames(tester, const Duration(milliseconds: 500));
+
+        // Cut to two lines with an ellipsis; the badge is still there.
+        final name = _inDialog(find.textContaining('…', findRichText: true));
+        expect(name, findsOneWidget);
+        expect(
+          _inDialog(
+            find.text(language == AppLanguage.tr ? 'Popüler' : 'Popular'),
+          ),
+          findsWidgets,
+        );
+        expect(overflows, isEmpty);
+        expect(tester.takeException(), isNull);
+
+        // The detail still shows the whole name.
+        await tester.tap(name);
+        await _pumpFrames(tester, const Duration(milliseconds: 500));
+        expect(find.byType(Dialog), findsNWidgets(2));
+        expect(overflows, isEmpty);
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await _pumpFrames(tester, const Duration(milliseconds: 300));
+      });
+    }
   });
 }
 

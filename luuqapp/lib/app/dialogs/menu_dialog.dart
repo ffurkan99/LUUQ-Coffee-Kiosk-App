@@ -1,5 +1,8 @@
 part of '../../main.dart';
 
+/// Height of a tag chip on a menu card; the tag row is one chip high.
+const double _menuTagHeight = 22;
+
 class _MenuDialog extends StatefulWidget {
   const _MenuDialog();
 
@@ -788,7 +791,6 @@ class _MenuDialogState extends State<_MenuDialog> {
   // ═══ MENU ITEM CARD ═══
   Widget _buildMenuItemCard(_MenuItem item) {
     final hasTags = item.tags.isNotEmpty;
-    final isPopular = item.tags.contains('Popüler');
     final isSpecial = item.tags.contains('Special');
     final dual = _hasDualPrice(item.price);
     // The grid key is part of the tag: while one grid fades into the next,
@@ -868,65 +870,10 @@ class _MenuDialogState extends State<_MenuDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Name + Badges
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      Text(
-                        _menuItemName(item),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: _gold,
-                          height: 1.2,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      if (isPopular || isSpecial)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: (isSpecial ? const Color(0xFFE879A8) : _gold)
-                                .withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color:
-                                  (isSpecial ? const Color(0xFFE879A8) : _gold)
-                                      .withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                isSpecial
-                                    ? Icons.star_rounded
-                                    : Icons.star_rounded,
-                                size: 14,
-                                color: isSpecial
-                                    ? const Color(0xFFE879A8)
-                                    : _gold,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                isSpecial ? 'Special' : trMenu('Popüler'),
-                                style: TextStyle(
-                                  fontSize: _fsBadge,
-                                  fontWeight: FontWeight.w900,
-                                  color: isSpecial
-                                      ? const Color(0xFFE879A8)
-                                      : _gold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
+                  // Name (at most two lines) with its badge right after it.
+                  LayoutBuilder(
+                    builder: (context, constraints) =>
+                        _buildMenuItemName(item, constraints.maxWidth),
                   ),
                   // Description
                   if (_menuItemDescription(item).isNotEmpty) ...[
@@ -942,41 +889,49 @@ class _MenuDialogState extends State<_MenuDialog> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  // Tags (filtered to avoid redundancy)
+                  // Tags (filtered to avoid redundancy), one line; the
+                  // detail shows them all.
                   if (hasTags) ...[
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: item.tags
-                          .where((tag) => tag != 'Popüler' && tag != 'Special')
-                          .map((tag) {
-                            final color =
-                                _tagStyles[tag] ?? const Color(0xFFB2BEC3);
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: color.withValues(alpha: 0.4),
+                    SizedBox(
+                      height: _menuTagHeight,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        clipBehavior: Clip.hardEdge,
+                        children: item.tags
+                            .where(
+                              (tag) => tag != 'Popüler' && tag != 'Special',
+                            )
+                            .map((tag) {
+                              final color =
+                                  _tagStyles[tag] ?? const Color(0xFFB2BEC3);
+                              return Container(
+                                height: _menuTagHeight,
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
                                 ),
-                              ),
-                              child: Text(
-                                _menuItemTag(item, tag),
-                                style: TextStyle(
-                                  fontSize: _fsBadge,
-                                  fontWeight: FontWeight.w800,
-                                  color: color,
-                                  letterSpacing: 0.5,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: color.withValues(alpha: 0.4),
+                                  ),
                                 ),
-                              ),
-                            );
-                          })
-                          .toList(),
+                                child: Text(
+                                  _menuItemTag(item, tag),
+                                  style: TextStyle(
+                                    fontSize: _fsBadge,
+                                    fontWeight: FontWeight.w800,
+                                    color: color,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              );
+                            })
+                            .toList(),
+                      ),
                     ),
                   ],
                 ],
@@ -989,6 +944,83 @@ class _MenuDialogState extends State<_MenuDialog> {
                 : _buildSinglePrice(item.price),
           ],
         ),
+      ),
+    );
+  }
+
+  static const _menuItemNameStyle = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w900,
+    color: _gold,
+    height: 1.2,
+    letterSpacing: 0.3,
+  );
+  static const _menuBadgeLabelStyle = TextStyle(
+    fontSize: _fsBadge,
+    fontWeight: FontWeight.w900,
+  );
+
+  /// The card's name: at most two lines, ending in '…' when cut, with the
+  /// Popular / Special badge kept right after it.
+  Widget _buildMenuItemName(_MenuItem item, double maxWidth) {
+    final isPopular = item.tags.contains('Popüler');
+    final isSpecial = item.tags.contains('Special');
+    final hasBadge = isPopular || isSpecial;
+    final badgeLabel = isSpecial ? 'Special' : trMenu('Popüler');
+    final textScaler = MediaQuery.textScalerOf(context);
+    var badgeWidth = 0.0;
+    if (hasBadge) {
+      final label = TextPainter(
+        text: TextSpan(text: badgeLabel, style: _menuBadgeLabelStyle),
+        textDirection: TextDirection.ltr,
+        textScaler: textScaler,
+      )..layout();
+      // Gap 8 + padding 2 × 8 + border 2 + star 14 + gap 4, and 2 to spare.
+      badgeWidth = 8 + 16 + 2 + 14 + 4 + label.width + 2;
+      label.dispose();
+    }
+    final name = fitNameBeforeBadge(
+      name: _menuItemName(item),
+      style: _menuItemNameStyle,
+      maxWidth: maxWidth,
+      badgeWidth: badgeWidth,
+      textScaler: textScaler,
+    );
+    return Text.rich(
+      TextSpan(
+        text: name,
+        children: [
+          if (hasBadge)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: _buildMenuItemBadge(badgeLabel, isSpecial: isSpecial),
+              ),
+            ),
+        ],
+      ),
+      style: _menuItemNameStyle,
+      maxLines: 2,
+    );
+  }
+
+  Widget _buildMenuItemBadge(String label, {required bool isSpecial}) {
+    final color = isSpecial ? const Color(0xFFE879A8) : _gold;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.star_rounded, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: _menuBadgeLabelStyle.copyWith(color: color)),
+        ],
       ),
     );
   }
