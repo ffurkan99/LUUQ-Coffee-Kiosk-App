@@ -2193,7 +2193,8 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       key: ValueKey('result_${drink.shortName}'),
       tween: Tween(begin: 0.0, end: 1.0),
       duration: const Duration(milliseconds: 1200),
-      curve: Curves.elasticOut,
+      // One flash that fades out; a bouncing curve would flicker it.
+      curve: Curves.easeOutCubic,
       builder: (context, value, child) {
         final flashIntensity = (1.0 - value).clamp(0.0, 1.0);
 
@@ -2201,6 +2202,17 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
           padding: EdgeInsets.all(isCompact ? 12 : 16),
           width: double.infinity,
           height: double.infinity,
+          // The thick flash edge is painted on top, so the content does not
+          // move while it thins out.
+          foregroundDecoration: flashIntensity > 0
+              ? BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: flashIntensity * 0.8),
+                    width: 3 * flashIntensity,
+                  ),
+                )
+              : null,
           decoration: BoxDecoration(
             color: _surface,
             borderRadius: BorderRadius.circular(32),
@@ -2210,7 +2222,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
                 Colors.white,
                 flashIntensity,
               )!,
-              width: 1.5 + (flashIntensity * 3),
+              width: 1.5,
             ),
             boxShadow: [
               BoxShadow(

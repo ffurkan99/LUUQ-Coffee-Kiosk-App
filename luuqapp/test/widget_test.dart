@@ -769,6 +769,81 @@ void main() {
       await _pumpFrames(tester, const Duration(milliseconds: 300));
     });
   });
+
+  group('small fixes', () {
+    tearDown(_disableLicensedKiosk);
+
+    testWidgets('the result card flashes once and its content stays put', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(
+        tester,
+        const Size(1920, 1080),
+        disableAnimations: true,
+      );
+      await _wakeKiosk(tester, 'ÇARKI ÇEVİR');
+      await tester.tap(find.text('ÇARKI ÇEVİR'));
+      await tester.pump();
+      await tester.pump();
+
+      final resultArea = find.byWidgetPredicate(
+        (w) =>
+            w is TweenAnimationBuilder<double> &&
+            w.key is ValueKey<String> &&
+            (w.key! as ValueKey<String>).value.startsWith('result_'),
+      );
+      expect(resultArea, findsOneWidget);
+      final card = find
+          .descendant(of: resultArea, matching: find.byType(Container))
+          .first;
+      final label = find.text('BUGÜNKÜ SEÇİMİN');
+
+      double flashAlpha() {
+        final decoration =
+            tester.widget<Container>(card).foregroundDecoration
+                as BoxDecoration?;
+        return decoration?.border?.top.color.a ?? 0;
+      }
+
+      // Relative to the card's size: the whole card may pulse in scale.
+      Offset labelOffset() {
+        final cardRect = tester.getRect(card);
+        final offset = tester.getTopLeft(label) - cardRect.topLeft;
+        return Offset(
+          (offset.dx / cardRect.width * 1000).roundToDouble(),
+          (offset.dy / cardRect.height * 1000).roundToDouble(),
+        );
+      }
+
+      final firstOffset = labelOffset();
+      var previous = flashAlpha();
+      expect(previous, greaterThan(0));
+      for (var frame = 0; frame < 80; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        final alpha = flashAlpha();
+        expect(alpha, lessThanOrEqualTo(previous + 1e-9));
+        expect(labelOffset(), firstOffset);
+        previous = alpha;
+      }
+      expect(previous, 0);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
+  });
+}
+
+/// Taps the idle kiosk awake until [label] is on screen.
+Future<void> _wakeKiosk(WidgetTester tester, String label) async {
+  for (var i = 0; i < 60 && find.text(label).evaluate().isEmpty; i++) {
+    await tester.tapAt(const Offset(960, 540));
+    await _pumpFrames(tester, const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+  }
+  expect(find.text(label), findsOneWidget);
 }
 
 Future<void> _pumpKioskAtSize(
