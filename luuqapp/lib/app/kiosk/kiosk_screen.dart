@@ -326,8 +326,27 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
         (name == null ? null : _findMenuItemByName(name));
   }
 
+  /// The theme set on the panel. Applied before the wheel is resolved, since
+  /// the default wheel picks depend on the theme. Null leaves the kiosk's own
+  /// theme; a theme change made here and not yet sent wins until it is.
+  /// Like the wheel, it is saved in the background: if saving fails, the
+  /// cached menu brings the same theme back at the next start.
+  void _applyRemoteTheme(String? themeKey) {
+    if (themeKey == null || MenuService.instance.hasPendingConfig('theme')) {
+      return;
+    }
+    final theme = AppTheme.values
+        .where((value) => value.name == themeKey)
+        .firstOrNull;
+    if (theme == null || theme == appThemeNotifier.value) return;
+    _LuuqSettings.instance.theme = theme;
+    appThemeNotifier.value = theme;
+    unawaited(_LuuqSettings.instance.save());
+  }
+
   void _applyRemoteCatalogToScreen(MenuCatalog catalog) {
     MenuService.instance.markDisplayed(catalog);
+    _applyRemoteTheme(catalog.themeKey);
     _applyRemoteMenuCatalog(catalog);
     // A local wheel/barista change still queued for the server must not be
     // overwritten by the (older) server value.
@@ -1713,6 +1732,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
             ),
           );
         } else if (adminSection == _AdminSection.theme) {
+          final themeBefore = appThemeNotifier.value;
           await showDialog<void>(
             // ignore: use_build_context_synchronously
             context: context,
@@ -1721,6 +1741,12 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
               child: _ThemeSelectionDialog(),
             ),
           );
+          // One push for the final choice, however many themes were tried.
+          if (appThemeNotifier.value != themeBefore) {
+            _reportMenuPush(
+              MenuService.instance.pushLocalTheme(appThemeNotifier.value.name),
+            );
+          }
         } else if (adminSection == _AdminSection.volume) {
           await showDialog<void>(
             // ignore: use_build_context_synchronously

@@ -13,6 +13,7 @@ MenuCatalog _catalog(
   Map<String, List<String>> categories, {
   List<String> wheel = const [],
   int revision = 1,
+  String? theme,
 }) {
   var c = 0;
   return MenuCatalog.fromApiJson({
@@ -41,6 +42,7 @@ MenuCatalog _catalog(
       ],
     },
     'wheel_item_ids': wheel,
+    'theme': theme,
   });
 }
 
@@ -196,5 +198,93 @@ void main() {
     expect(barista.drink, 'Çilekli Milkshake');
     expect(barista.dessert, 'Vanilyalı Dondurma');
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  group('theme set on the panel', () {
+    final menu = {
+      'local_cafe_rounded': ['Latte'],
+      'cake_rounded': ['Brownie'],
+    };
+
+    // Each test ends on the summer theme the other tests expect.
+    Future<void> backToSummer(WidgetTester tester) async {
+      MenuService.instance.debugSetPendingConfig('theme', pending: false);
+      GlobalDialogTracker.isCustomerDialogOpen = false;
+      await _setCatalog(tester, _catalog(menu, revision: 99, theme: 'summer'));
+      expect(appThemeNotifier.value, AppTheme.summer);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+
+    testWidgets('is applied, and no theme keeps the kiosk\'s own', (
+      tester,
+    ) async {
+      addTearDown(tester.view.reset);
+      await _pumpKiosk(tester);
+      await _setCatalog(tester, _catalog(menu, theme: 'summer'));
+      await _setCatalog(tester, _catalog(menu, revision: 2, theme: 'newYear'));
+      expect(appThemeNotifier.value, AppTheme.newYear);
+      expect(tester.takeException(), isNull);
+
+      // "Kiosk seçsin" on the panel: the kiosk keeps what it shows.
+      await _setCatalog(tester, _catalog(menu, revision: 3));
+      expect(appThemeNotifier.value, AppTheme.newYear);
+      // A name this version does not know is ignored the same way.
+      await _setCatalog(tester, _catalog(menu, revision: 4, theme: 'spring'));
+      expect(appThemeNotifier.value, AppTheme.newYear);
+      await backToSummer(tester);
+    });
+
+    testWidgets('waits while a customer dialog is open', (tester) async {
+      addTearDown(tester.view.reset);
+      addTearDown(() => GlobalDialogTracker.isCustomerDialogOpen = false);
+      await _pumpKiosk(tester);
+      await _setCatalog(tester, _catalog(menu, theme: 'summer'));
+
+      GlobalDialogTracker.isCustomerDialogOpen = true;
+      await _setCatalog(tester, _catalog(menu, revision: 2, theme: 'winter'));
+      expect(appThemeNotifier.value, AppTheme.summer);
+
+      GlobalDialogTracker.isCustomerDialogOpen = false;
+      await tester.tapAt(const Offset(960, 540));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(appThemeNotifier.value, AppTheme.winter);
+      await backToSummer(tester);
+    });
+
+    testWidgets('does not replace a kiosk change that is not sent yet', (
+      tester,
+    ) async {
+      addTearDown(tester.view.reset);
+      addTearDown(
+        () => MenuService.instance.debugSetPendingConfig(
+          'theme',
+          pending: false,
+        ),
+      );
+      await _pumpKiosk(tester);
+      await _setCatalog(tester, _catalog(menu, theme: 'summer'));
+
+      MenuService.instance.debugSetPendingConfig('theme', pending: true);
+      await _setCatalog(tester, _catalog(menu, revision: 2, theme: 'feast'));
+      expect(appThemeNotifier.value, AppTheme.summer);
+      await backToSummer(tester);
+    });
+  });
+
+  test('the theme survives the menu cache', () {
+    final cached = MenuCatalog.fromCacheJson(
+      _catalog(const {
+        'local_cafe_rounded': ['Latte'],
+      }, theme: 'feast').toJson(),
+    );
+    expect(cached.themeKey, 'feast');
+    expect(
+      _catalog(const {
+        'local_cafe_rounded': ['Latte'],
+      }).themeKey,
+      isNull,
+    );
   });
 }

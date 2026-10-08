@@ -270,7 +270,17 @@ class MenuCatalog {
     this.updatedAt,
     this.effectiveRevision,
     this.menuProfileId,
+    this.themeKey,
   });
+
+  /// Theme names the server may send (the app's AppTheme values).
+  static const Set<String> themeKeys = {
+    'normal',
+    'summer',
+    'winter',
+    'feast',
+    'newYear',
+  };
 
   final int schemaVersion;
   final int menuVersion;
@@ -284,6 +294,10 @@ class MenuCatalog {
   final String? updatedAt;
   final String? effectiveRevision;
   final String? menuProfileId;
+
+  /// The theme set on the panel for this kiosk (device, license or global);
+  /// null when the panel leaves the theme to the kiosk.
+  final String? themeKey;
 
   Iterable<RemoteMenuItem> get items =>
       categories.expand((category) => category.items);
@@ -302,6 +316,7 @@ class MenuCatalog {
         updatedAt: updatedAt,
         effectiveRevision: effectiveRevision,
         menuProfileId: menuProfileId,
+        themeKey: themeKey,
       );
 
   Map<String, dynamic> toJson() => {
@@ -320,6 +335,7 @@ class MenuCatalog {
     'wheel_item_ids': wheelItemIds,
     'barista_drink_id': baristaDrinkId,
     'barista_dessert_id': baristaDessertId,
+    'theme': themeKey,
     if (updatedAt != null) 'updated_at': updatedAt,
   };
 
@@ -387,6 +403,10 @@ class MenuCatalog {
       updatedAt: json['updated_at']?.toString(),
       effectiveRevision: json['effective_revision']?.toString(),
       menuProfileId: json['menu_profile_id']?.toString(),
+      // An unknown name (a newer server) is treated as "not set".
+      themeKey: themeKeys.contains(json['theme'])
+          ? json['theme'] as String
+          : null,
     );
   }
 }

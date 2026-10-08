@@ -107,6 +107,17 @@ void main() {
     expect(configBodies.single['wheel_item_ids'], wheel);
   });
 
+  test('a theme change is sent as the theme domain', () async {
+    final result = await http.runWithClient(
+      () => service.pushLocalTheme('newYear'),
+      () => client((_) => http.Response('{"active":true}', 200)),
+    );
+    expect(result, MenuPushResult.saved);
+    expect(configBodies.single['domain'], 'theme');
+    expect(configBodies.single['theme'], 'newYear');
+    expect(service.hasPendingConfig('theme'), isFalse);
+  });
+
   test('422 drops the change and reports rejected', () async {
     final result = await http.runWithClient(
       () => service.pushLocalWheel(wheel),

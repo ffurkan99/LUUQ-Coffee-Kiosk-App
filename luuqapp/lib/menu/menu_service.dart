@@ -15,7 +15,7 @@ import 'menu_cache.dart';
 import '../net/luuq_http.dart';
 import 'menu_models.dart';
 
-/// Outcome of a local wheel/barista change, shown to the admin.
+/// Outcome of a local wheel/barista/theme change, shown to the admin.
 enum MenuPushResult {
   /// The server accepted the change.
   saved,
@@ -54,7 +54,7 @@ class MenuService {
   String? _loadedScopeKey;
   int _scopeEpoch = 0;
 
-  /// Domains ('wheel', 'barista') with a local change not yet on the server,
+  /// Domains ('wheel', 'barista', 'theme') with a local change not yet on the server,
   /// for the currently loaded scope. While set, the server's value for that
   /// domain must not overwrite the kiosk's newer local choice.
   final Set<String> _pendingDomains = <String>{};
@@ -84,6 +84,11 @@ class MenuService {
   DateTime Function() now = DateTime.now;
 
   bool hasPendingConfig(String domain) => _pendingDomains.contains(domain);
+
+  /// Marks a domain as having an unsent local change, for widget tests only.
+  @visibleForTesting
+  void debugSetPendingConfig(String domain, {required bool pending}) =>
+      pending ? _pendingDomains.add(domain) : _pendingDomains.remove(domain);
 
   Future<String> _scopeKey(LicenseStatus status, String deviceId) async {
     final profileId =
@@ -452,6 +457,11 @@ class MenuService {
     'barista_drink_id': drinkId,
     'barista_dessert_id': dessertId,
   });
+
+  /// The staff's theme choice, saved as this device's own theme on the server
+  /// (the newest change wins until the panel changes the theme again).
+  Future<MenuPushResult> pushLocalTheme(String themeName) =>
+      _queueAndPush('theme', {'theme': themeName});
 
   /// Persists the change for the current profile scope, then tries to send it.
   /// The idempotency key is fixed when queued, so a retry after a lost
