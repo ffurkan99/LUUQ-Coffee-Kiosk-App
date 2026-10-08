@@ -82,4 +82,18 @@ void main() {
     expect(service.recordCheckResult(revoked), isTrue);
     expect(service.connectionLost.value, isFalse);
   });
+
+  test('a resume right after a check does not check again', () {
+    // start() counts as the gate's fresh check.
+    clock = clock.add(const Duration(seconds: 5));
+    expect(service.shouldSyncOnResume(), isFalse);
+    clock = clock.add(const Duration(seconds: 15));
+    expect(service.shouldSyncOnResume(), isTrue);
+
+    // Offline for a while: the last answer is old, so a resume checks.
+    expect(service.recordCheckResult(active), isTrue);
+    clock = clock.add(const Duration(minutes: 3));
+    expect(service.recordCheckResult(offline), isFalse);
+    expect(service.shouldSyncOnResume(), isTrue);
+  });
 }

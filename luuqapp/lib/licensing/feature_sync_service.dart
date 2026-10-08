@@ -33,6 +33,11 @@ class FeatureSyncService with WidgetsBindingObserver {
   /// license stays active, so the cover lifts on the next successful check.
   static const Duration connectionGrace = Duration(minutes: 1);
 
+  /// Coming back to the foreground checks right away, unless the server
+  /// answered this recently. Entering kiosk lock or closing a system panel
+  /// also "resumes" the app, often right after the gate's own check.
+  static const Duration resumeSyncMinGap = Duration(seconds: 15);
+
   /// True while the kiosk has been unable to reach the license server for
   /// at least [connectionGrace].
   final ValueNotifier<bool> connectionLost = ValueNotifier<bool>(false);
@@ -221,9 +226,16 @@ class FeatureSyncService with WidgetsBindingObserver {
     );
   }
 
+  /// Whether a resume should check now (see [resumeSyncMinGap]).
+  @visibleForTesting
+  bool shouldSyncOnResume() {
+    final last = _lastSuccessfulCheck;
+    return last == null || now().difference(last) >= resumeSyncMinGap;
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed && shouldSyncOnResume()) {
       // Immediately run sync when Kiosk resumes from background
       syncNow();
     }
