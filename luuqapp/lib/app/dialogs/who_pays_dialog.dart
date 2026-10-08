@@ -9,6 +9,10 @@ const List<Color> _billPalette = [
   Color(0xFF55EFC4), // Light Green
 ];
 
+/// Width of a player chip: three chips and two 12 px gaps fit the card's
+/// 396 px content width (480 less 2 × 40 padding and 2 × 2 border).
+const double _whoPaysChipWidth = 120;
+
 // ===== HESAP KİMDE DIALOG =====
 class _HesapKimdeDialog extends StatefulWidget {
   const _HesapKimdeDialog();
@@ -128,6 +132,15 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // The open colour palette adds a row; the gaps around the machine give
+    // its height back so six players still fit the screen, with enlarged
+    // text too.
+    final enlargedText = MediaQuery.textScalerOf(context).scale(28) > 28;
+    final machineGap = _editingPlayerIndex == null
+        ? 32.0
+        : enlargedText
+        ? 8.0
+        : 20.0;
     return Dialog(
       backgroundColor: Colors.transparent,
       child: _withKioskCloseButton(
@@ -262,9 +275,12 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                                 _physicsStalled = false;
                               });
                             },
+                      // One width for every chip: three to a row, so six
+                      // players take two rows in any language.
                       child: Container(
+                        width: _whoPaysChipWidth,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
+                          horizontal: 10,
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
@@ -280,7 +296,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                           ),
                         ),
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Container(
                               width: 16,
@@ -295,12 +311,21 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              tr('${index + 1}. Kişi', 'Person ${index + 1}'),
-                              style: TextStyle(
-                                color: isEditing ? color : Colors.white70,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  tr(
+                                    '${index + 1}. Kişi',
+                                    'Person ${index + 1}',
+                                  ),
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    color: isEditing ? color : Colors.white70,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -371,7 +396,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                 ),
               ],
 
-              const SizedBox(height: 32),
+              SizedBox(height: machineGap),
 
               // Lottery Machine Area
               _LotteryMachine(
@@ -398,7 +423,7 @@ class _HesapKimdeDialogState extends State<_HesapKimdeDialog> {
                 },
               ),
 
-              const SizedBox(height: 32),
+              SizedBox(height: machineGap),
 
               // Spin button & Result. Sabit yükseklik: sonuç durumu (kutu +
               // "Tekrar Çek") en uzun içeriktir; bölge her durumda onun

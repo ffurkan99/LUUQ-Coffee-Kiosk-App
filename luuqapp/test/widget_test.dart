@@ -981,6 +981,60 @@ void main() {
         await _pumpFrames(tester, const Duration(milliseconds: 300));
       });
     }
+
+    for (final (language, textScale) in [
+      (AppLanguage.en, 1.0),
+      (AppLanguage.tr, 1.0),
+      (AppLanguage.tr, 1.2),
+    ]) {
+      testWidgets('six players and the colour palette fit Who Pays '
+          '($language, text x$textScale)', (tester) async {
+        _enableLicensedKiosk();
+        appLanguageNotifier.value = language;
+        final (overflows, restore) = _collectOverflows();
+        addTearDown(restore);
+        await _pumpKioskAtSize(
+          tester,
+          const Size(1920, 1080),
+          textScale: textScale,
+        );
+        await _openWhoPaysDialog(tester, language: language);
+        String player(int i) =>
+            language == AppLanguage.tr ? '$i. Kişi' : 'Person $i';
+
+        await tester.tap(find.text('6').first);
+        await _pumpFrames(tester, const Duration(milliseconds: 300));
+        await tester.tap(find.text(player(1)));
+        await _pumpFrames(tester, const Duration(milliseconds: 300));
+        expect(find.text(player(6)), findsOneWidget);
+        expect(
+          find.bySemanticsLabel(RegExp('Oyuncu rengi|Player color')),
+          findsWidgets,
+        );
+
+        // Two rows of three (the selected chip's thicker border moves its
+        // text by a pixel).
+        final tops = [
+          for (var i = 1; i <= 6; i++)
+            tester.getCenter(find.text(player(i))).dy,
+        ]..sort();
+        var rows = 1;
+        for (var i = 1; i < tops.length; i++) {
+          if (tops[i] - tops[i - 1] > 8) rows++;
+        }
+        expect(rows, 2);
+        final card = tester.getRect(
+          find.byKey(const ValueKey('who_pays_card')),
+        );
+        expect(card.top, greaterThanOrEqualTo(0));
+        expect(card.bottom, lessThanOrEqualTo(1080));
+        expect(overflows, isEmpty);
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await _pumpFrames(tester, const Duration(milliseconds: 300));
+      });
+    }
   });
 }
 
