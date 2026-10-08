@@ -1094,6 +1094,31 @@ void main() {
       await _pumpFrames(tester, const Duration(milliseconds: 300));
     });
 
+    testWidgets('pointer moves restart the idle timer at most once a second', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(tester, const Size(1920, 1080));
+      await _wakeKiosk(tester, 'ÇARKI ÇEVİR');
+      await _pumpFrames(tester, const Duration(milliseconds: 1500));
+
+      // A slow drag over an empty spot: one tap, then 40 moves in well
+      // under a second of real time.
+      final before = debugKioskIdleResets();
+      final gesture = await tester.startGesture(const Offset(960, 1060));
+      for (var i = 0; i < 40; i++) {
+        await gesture.moveBy(const Offset(1, 0));
+      }
+      await gesture.up();
+      await tester.pump();
+      // The tap restarts it (also through the global pointer route); the
+      // moves add none, as they follow it within a second.
+      expect(debugKioskIdleResets() - before, lessThanOrEqualTo(3));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
+
     testWidgets('the kiosk holds still behind customer dialogs', (
       tester,
     ) async {

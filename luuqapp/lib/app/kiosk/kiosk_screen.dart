@@ -14,6 +14,11 @@ bool debugKioskPulseAnimating() =>
     _CafeKioskScreenState.activeInstance?._pulseController.isAnimating ??
     false;
 
+/// Test hook: how many times the visible kiosk restarted its idle timer.
+@visibleForTesting
+int debugKioskIdleResets() =>
+    _CafeKioskScreenState.activeInstance?._idleResets ?? 0;
+
 /// Test hook: the barista drink/dessert the visible kiosk recommends.
 @visibleForTesting
 ({String? drink, String? dessert}) debugKioskBaristaNames() {
@@ -145,7 +150,24 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     }
   }
 
+  /// When the idle timer was last restarted, and how often (tests).
+  DateTime? _lastIdleReset;
+  int _idleResets = 0;
+
+  /// Hover and drag events come at up to 120 Hz; restarting the idle timer
+  /// once a second is enough (a tap always restarts it).
+  void _handlePointerActivity() {
+    final last = _lastIdleReset;
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 1)) {
+      return;
+    }
+    _resetIdleTimer(fromTap: false);
+  }
+
   void _resetIdleTimer({bool fromTap = false}) {
+    _lastIdleReset = DateTime.now();
+    _idleResets++;
     _tryApplyPendingRemoteMenu();
     _idleTimer?.cancel();
     if (_isInCleaningMode) return;
@@ -1106,10 +1128,10 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
           child: _isLoading
               ? Scaffold(backgroundColor: _bgDark, body: _buildLoadingScreen())
               : MouseRegion(
-                  onHover: (_) => _resetIdleTimer(fromTap: false),
+                  onHover: (_) => _handlePointerActivity(),
                   child: Listener(
                     onPointerDown: (_) => _resetIdleTimer(fromTap: true),
-                    onPointerMove: (_) => _resetIdleTimer(fromTap: false),
+                    onPointerMove: (_) => _handlePointerActivity(),
                     behavior: HitTestBehavior.translucent,
                     child: Scaffold(
                       body: Stack(
