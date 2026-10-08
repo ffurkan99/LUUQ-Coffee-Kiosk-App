@@ -153,181 +153,185 @@ class _ProductDetailDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      child: Container(
-        width: 460,
-        padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 42),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1F1A28),
-          borderRadius: BorderRadius.circular(36),
-          border: Border.all(color: _gold.withValues(alpha: 0.3), width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.6),
-              blurRadius: 30,
-              offset: const Offset(0, 15),
-            ),
-            if (isSpecial)
+      // The X sits in the card's own stack: a button reaching outside its
+      // stack's box only takes taps on the part inside.
+      child: _withKioskCloseButton(
+        Container(
+          width: 460,
+          padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 42),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1F1A28),
+            borderRadius: BorderRadius.circular(36),
+            border: Border.all(color: _gold.withValues(alpha: 0.3), width: 2),
+            boxShadow: [
               BoxShadow(
-                color: _gold.withValues(alpha: 0.15),
-                blurRadius: 40,
-                spreadRadius: 5,
+                color: Colors.black.withValues(alpha: 0.6),
+                blurRadius: 30,
+                offset: const Offset(0, 15),
               ),
-          ],
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            SizedBox(
-              width: double.infinity,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _productHero(
-                    heroTag,
-                    Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF14101A),
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.1),
+              if (isSpecial)
+                BoxShadow(
+                  color: _gold.withValues(alpha: 0.15),
+                  blurRadius: 40,
+                  spreadRadius: 5,
+                ),
+            ],
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _productHero(
+                      heroTag,
+                      Container(
+                        width: 200,
+                        height: 200,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF14101A),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                          ),
                         ),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child:
-                          displayImagePath == null &&
-                              item.remoteImageUrl == null
-                          ? Center(
-                              child: Icon(
-                                item.icon,
-                                size: 90,
-                                color: _gold.withValues(alpha: 0.7),
+                        clipBehavior: Clip.antiAlias,
+                        child:
+                            displayImagePath == null &&
+                                item.remoteImageUrl == null
+                            ? Center(
+                                child: Icon(
+                                  item.icon,
+                                  size: 90,
+                                  color: _gold.withValues(alpha: 0.7),
+                                ),
+                              )
+                            : _buildMenuImage(
+                                fallbackIcon: item.icon,
+                                assetPath: displayImagePath,
+                                remoteImageUrl: item.remoteImageUrl,
+                                cacheWidth: 400,
+                                fit: BoxFit.cover,
                               ),
-                            )
-                          : _buildMenuImage(
-                              fallbackIcon: item.icon,
-                              assetPath: displayImagePath,
-                              remoteImageUrl: item.remoteImageUrl,
-                              cacheWidth: 400,
-                              fit: BoxFit.cover,
-                            ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    _menuItemName(item),
-                    style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      color: _gold,
-                      letterSpacing: 0.5,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
-                  if (_menuItemDescription(item).isNotEmpty) ...[
+                    const SizedBox(height: 28),
                     Text(
-                      _menuItemDescription(item),
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white.withValues(alpha: 0.75),
-                        height: 1.4,
+                      _menuItemName(item),
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        color: _gold,
+                        letterSpacing: 0.5,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (hasTags) ...[
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      alignment: WrapAlignment.center,
-                      children: item.tags.map((tag) {
-                        final color =
-                            _tagStyles[tag] ?? const Color(0xFFB2BEC3);
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: color.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: Text(
-                            _menuItemTag(item, tag),
-                            style: TextStyle(
-                              fontSize: _fsBadge,
-                              fontWeight: FontWeight.w800,
-                              color: color,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 28),
-                  ],
-                  dual
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _priceBadge('M', _mPrice(item.price)),
-                            const SizedBox(width: 16),
-                            _priceBadge('L', _lPrice(item.price)),
-                          ],
-                        )
-                      : _buildSinglePrice(item.price),
-                ],
-              ),
-            ),
-            if (isPopular || isSpecial)
-              Positioned(
-                top: -22,
-                left: -18,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: (isSpecial ? const Color(0xFFE879A8) : _gold)
-                        .withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: (isSpecial ? const Color(0xFFE879A8) : _gold)
-                          .withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.star_rounded,
-                        size: 18,
-                        color: (isSpecial ? const Color(0xFFE879A8) : _gold),
-                      ),
-                      const SizedBox(width: 6),
+                    const SizedBox(height: 10),
+                    if (_menuItemDescription(item).isNotEmpty) ...[
                       Text(
-                        isSpecial ? 'Special' : trMenu('Popüler'),
+                        _menuItemDescription(item),
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          color: (isSpecial ? const Color(0xFFE879A8) : _gold),
+                          fontSize: 16,
+                          color: Colors.white.withValues(alpha: 0.75),
+                          height: 1.4,
                         ),
+                        textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 20),
                     ],
-                  ),
+                    if (hasTags) ...[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        alignment: WrapAlignment.center,
+                        children: item.tags.map((tag) {
+                          final color =
+                              _tagStyles[tag] ?? const Color(0xFFB2BEC3);
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: color.withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Text(
+                              _menuItemTag(item, tag),
+                              style: TextStyle(
+                                fontSize: _fsBadge,
+                                fontWeight: FontWeight.w800,
+                                color: color,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 28),
+                    ],
+                    dual
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _priceBadge('M', _mPrice(item.price)),
+                              const SizedBox(width: 16),
+                              _priceBadge('L', _lPrice(item.price)),
+                            ],
+                          )
+                        : _buildSinglePrice(item.price),
+                  ],
                 ),
               ),
-            // 16 px in from the card's corner (the card padding is 36/42).
-            const Positioned(top: -26, right: -20, child: _KioskCloseButton()),
-          ],
+              if (isPopular || isSpecial)
+                Positioned(
+                  top: -22,
+                  left: -18,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (isSpecial ? const Color(0xFFE879A8) : _gold)
+                          .withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: (isSpecial ? const Color(0xFFE879A8) : _gold)
+                            .withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.star_rounded,
+                          size: 18,
+                          color: (isSpecial ? const Color(0xFFE879A8) : _gold),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isSpecial ? 'Special' : trMenu('Popüler'),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: (isSpecial
+                                ? const Color(0xFFE879A8)
+                                : _gold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

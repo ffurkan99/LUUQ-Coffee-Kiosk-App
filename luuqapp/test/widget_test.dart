@@ -831,7 +831,50 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await _pumpFrames(tester, const Duration(milliseconds: 300));
     });
+
+    testWidgets('the product detail X closes from its outer corner too', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(tester, const Size(1920, 1080));
+      await _openMenu(tester);
+      await tester.tap(
+        find
+            .descendant(of: find.byType(Dialog), matching: find.byType(Hero))
+            .first,
+      );
+      await _pumpFrames(tester, const Duration(milliseconds: 500));
+      expect(find.byType(Dialog), findsNWidgets(2));
+
+      final close = find
+          .ancestor(
+            of: find.descendant(
+              of: find.byType(Dialog).last,
+              matching: find.byIcon(Icons.close_rounded),
+            ),
+            matching: find.byType(BouncyButton),
+          )
+          .first;
+      expect(close, findsOneWidget);
+      final rect = tester.getRect(close);
+      expect(rect.height, greaterThanOrEqualTo(44));
+      // Near the top-right edge, where the old button took no taps.
+      await tester.tapAt(rect.topRight + const Offset(-10, 10));
+      await _pumpFrames(tester, const Duration(milliseconds: 400));
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
   });
+}
+
+Future<void> _openMenu(WidgetTester tester) async {
+  await _wakeKiosk(tester, 'TÜM MENÜYÜ İNCELE');
+  await tester.tap(find.text('TÜM MENÜYÜ İNCELE'));
+  await _pumpFrames(tester, const Duration(milliseconds: 500));
+  expect(find.byType(Dialog), findsOneWidget);
 }
 
 /// Taps the idle kiosk awake until [label] is on screen.
