@@ -83,6 +83,24 @@ void main() {
     expect(service.connectionLost.value, isFalse);
   });
 
+  test('checks slow down while offline and speed up on the first answer', () {
+    expect(service.currentSyncInterval, FeatureSyncService.featureSyncInterval);
+    clock = clock.add(const Duration(seconds: 30));
+    service.recordCheckResult(offline);
+    expect(service.currentSyncInterval, FeatureSyncService.featureSyncInterval);
+    clock = clock.add(const Duration(seconds: 30));
+    service.recordCheckResult(offline);
+    expect(service.connectionLost.value, isTrue);
+    expect(service.currentSyncInterval, FeatureSyncService.offlineSyncInterval);
+    expect(service.isRunning, isTrue);
+
+    clock = clock.add(const Duration(seconds: 90));
+    service.recordCheckResult(active);
+    expect(service.connectionLost.value, isFalse);
+    expect(service.currentSyncInterval, FeatureSyncService.featureSyncInterval);
+    expect(service.isRunning, isTrue);
+  });
+
   test('a resume right after a check does not check again', () {
     // start() counts as the gate's fresh check.
     clock = clock.add(const Duration(seconds: 5));

@@ -135,7 +135,11 @@ class MenuService {
       error,
       stackTrace,
     ) {
-      debugPrint('[MENU][SYNC] $error\n$stackTrace');
+      // Release logs keep the one-line error; a failing server would
+      // otherwise print a stack trace every 30 s.
+      debugPrint(
+        kDebugMode ? '[MENU][SYNC] $error\n$stackTrace' : '[MENU][SYNC] $error',
+      );
     });
     _syncInFlight = future;
     try {
@@ -591,7 +595,11 @@ class MenuService {
       }
       return MenuPushResult.queued;
     } catch (error, stackTrace) {
-      debugPrint('[MENU][CONFIG] $error\n$stackTrace');
+      debugPrint(
+        kDebugMode
+            ? '[MENU][CONFIG] $error\n$stackTrace'
+            : '[MENU][CONFIG] $error',
+      );
       return MenuPushResult.queued;
     }
   }

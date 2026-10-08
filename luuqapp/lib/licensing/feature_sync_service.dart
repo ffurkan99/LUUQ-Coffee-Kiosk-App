@@ -27,6 +27,10 @@ class FeatureSyncService with WidgetsBindingObserver {
   /// Easy to adjust polling frequency for sync
   static const Duration featureSyncInterval = Duration(seconds: 30);
 
+  /// While [connectionLost] covers the kiosk, the server is tried less
+  /// often; the first answer brings back [featureSyncInterval].
+  static const Duration offlineSyncInterval = Duration(seconds: 90);
+
   /// Internet is required: once the server could not be reached for this
   /// long (two failed checks in a row at the 30 s interval), [connectionLost]
   /// covers the kiosk. A single dropped check does not flash the cover. The
@@ -92,9 +96,20 @@ class FeatureSyncService with WidgetsBindingObserver {
     }
   }
 
+  /// The period of the running checks.
+  @visibleForTesting
+  Duration get currentSyncInterval =>
+      connectionLost.value ? offlineSyncInterval : featureSyncInterval;
+
   void _startTimer() {
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(featureSyncInterval, (_) => syncNow());
+    _syncTimer = Timer.periodic(currentSyncInterval, (_) => syncNow());
+  }
+
+  void _setConnectionLost(bool lost) {
+    if (connectionLost.value == lost) return;
+    connectionLost.value = lost;
+    if (_syncTimer != null) _startTimer();
   }
 
   /// Trigger checks now with the backend
@@ -146,12 +161,12 @@ class FeatureSyncService with WidgetsBindingObserver {
         (status.reason == 'network_error' || status.reason == 'server_error');
     if (!unreachable) {
       _lastSuccessfulCheck = now();
-      connectionLost.value = false;
+      _setConnectionLost(false);
       return true;
     }
     final last = _lastSuccessfulCheck ??= now();
     if (now().difference(last) >= connectionGrace) {
-      connectionLost.value = true;
+      _setConnectionLost(true);
     }
     return false;
   }
