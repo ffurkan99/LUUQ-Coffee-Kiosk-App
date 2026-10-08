@@ -1093,6 +1093,49 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await _pumpFrames(tester, const Duration(milliseconds: 300));
     });
+
+    testWidgets('the kiosk holds still behind customer dialogs', (
+      tester,
+    ) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(tester, const Size(1920, 1080));
+      bool kioskTicking() => TickerMode.valuesOf(
+        tester.element(find.byKey(const ValueKey('kiosk_left_column'))),
+      ).enabled;
+
+      await _openMenu(tester);
+      expect(debugKioskDialogDepth(), 1);
+      expect(kioskTicking(), isFalse);
+      expect(debugKioskPulseAnimating(), isFalse);
+
+      await tester.tap(
+        find
+            .descendant(of: find.byType(Dialog), matching: find.byType(Hero))
+            .first,
+      );
+      await _pumpFrames(tester, const Duration(milliseconds: 500));
+      expect(debugKioskDialogDepth(), 2);
+
+      await tester.tap(find.byIcon(Icons.close_rounded).last);
+      await _pumpFrames(tester, const Duration(milliseconds: 400));
+      expect(debugKioskDialogDepth(), 1);
+      await tester.tapAt(const Offset(4, 4));
+      await _pumpFrames(tester, const Duration(milliseconds: 400));
+      expect(find.byType(Dialog), findsNothing);
+      expect(debugKioskDialogDepth(), 0);
+      expect(kioskTicking(), isTrue);
+      expect(debugKioskPulseAnimating(), isTrue);
+
+      // The idle timeout closes a forgotten dialog; the count follows.
+      await _openMenu(tester);
+      expect(debugKioskDialogDepth(), 1);
+      await _pumpFrames(tester, const Duration(seconds: 62));
+      expect(find.byType(Dialog), findsNothing);
+      expect(debugKioskDialogDepth(), 0);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
   });
 }
 
