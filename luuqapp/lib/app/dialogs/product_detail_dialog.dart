@@ -86,15 +86,14 @@ class _ProductDetailDialog extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           SizedBox(
-            width: 44,
-            child: Text(
+            width: 60,
+            child: _fittedPrice(
               price,
-              style: const TextStyle(
+              const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
                 color: _cream,
               ),
-              textAlign: TextAlign.center,
             ),
           ),
         ],
@@ -115,13 +114,15 @@ class _ProductDetailDialog extends StatelessWidget {
         children: [
           const Icon(Icons.payments_rounded, color: _gold, size: 22),
           const SizedBox(width: 10),
-          Text(
-            price,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: _cream,
-              letterSpacing: 0.5,
+          Flexible(
+            child: _fittedPrice(
+              price,
+              const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: _cream,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
         ],

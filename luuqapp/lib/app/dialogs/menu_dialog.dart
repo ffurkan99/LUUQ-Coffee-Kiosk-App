@@ -999,14 +999,15 @@ class _MenuDialogState extends State<_MenuDialog> {
       width: 90,
       height: 46,
       alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: _gold.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _gold.withValues(alpha: 0.4)),
       ),
-      child: Text(
+      child: _fittedPrice(
         price,
-        style: const TextStyle(
+        const TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w900,
           color: _gold,
@@ -1061,15 +1062,14 @@ class _MenuDialogState extends State<_MenuDialog> {
           ),
           const SizedBox(width: 6),
           SizedBox(
-            width: 44,
-            child: Text(
+            width: 60,
+            child: _fittedPrice(
               price,
-              style: const TextStyle(
+              const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
                 color: _cream,
               ),
-              textAlign: TextAlign.center,
             ),
           ),
         ],

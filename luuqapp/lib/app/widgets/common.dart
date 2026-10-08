@@ -285,6 +285,14 @@ Widget _withKioskCloseButton(
   );
 }
 
+/// [price] on one line at [style]'s size; a price too long for its box
+/// (the panel takes any text) shrinks to fit instead of wrapping or
+/// overflowing.
+Widget _fittedPrice(String price, TextStyle style) => FittedBox(
+  fit: BoxFit.scaleDown,
+  child: Text(price, maxLines: 1, softWrap: false, style: style),
+);
+
 class _VirtualCanvasDialogWrapper extends StatelessWidget {
   final Widget child;
   const _VirtualCanvasDialogWrapper({required this.child});

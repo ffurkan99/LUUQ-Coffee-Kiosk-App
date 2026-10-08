@@ -12,6 +12,8 @@ import 'package:luuqapp/licensing/feature_sync_service.dart';
 import 'package:luuqapp/licensing/license_gate.dart';
 import 'package:luuqapp/licensing/license_service.dart';
 import 'package:luuqapp/licensing/license_status.dart';
+import 'package:luuqapp/menu/menu_models.dart';
+import 'package:luuqapp/menu/menu_service.dart';
 import 'package:luuqapp/src/who_pays/lottery_simulation.dart';
 import 'package:luuqapp/src/who_pays/lottery_machine_view.dart';
 
@@ -771,6 +773,9 @@ void main() {
   });
 
   group('small fixes', () {
+    // A test that ends with a dialog open leaves this set; a new menu would
+    // then wait for the dialog to close.
+    setUp(() => GlobalDialogTracker.isCustomerDialogOpen = false);
     tearDown(_disableLicensedKiosk);
 
     testWidgets('the result card flashes once and its content stays put', (
@@ -867,8 +872,113 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await _pumpFrames(tester, const Duration(milliseconds: 300));
     });
+
+    testWidgets('long prices stay on one line in their badges', (tester) async {
+      _enableLicensedKiosk();
+      addTearDown(() => MenuService.instance.catalogNotifier.value = null);
+      final (overflows, restore) = _collectOverflows();
+      addTearDown(restore);
+      await _pumpKioskAtSize(tester, const Size(1920, 1080));
+      await _setMenuCatalog(
+        tester,
+        _layoutCatalog([
+          (name: 'Latte', price: '185₺ / 205₺', tags: [], description: ''),
+          (
+            name: 'Büyük Latte',
+            price: '1.250₺ / 1.450₺',
+            tags: [],
+            description: '',
+          ),
+          (name: 'Pasta', price: '12.500₺', tags: [], description: ''),
+        ]),
+      );
+      await _openMenu(tester);
+
+      // A four-digit price is as tall as a short one: not wrapped, and
+      // (with the wider badge) not shrunk either.
+      final short = tester.getSize(_inDialog(find.text('185₺')));
+      final long = tester.getSize(_inDialog(find.text('1.250₺')));
+      expect(long.height, short.height);
+      expect(long.width, lessThanOrEqualTo(60));
+      final single = tester.getSize(_inDialog(find.text('12.500₺')));
+      expect(single.width, lessThanOrEqualTo(90 - 16));
+
+      for (final name in ['Büyük Latte', 'Pasta']) {
+        await tester.tap(_inDialog(find.text(name)));
+        await _pumpFrames(tester, const Duration(milliseconds: 500));
+        expect(find.byType(Dialog), findsNWidgets(2));
+        await tester.tap(
+          _inDialog(find.byIcon(Icons.close_rounded), last: true),
+        );
+        await _pumpFrames(tester, const Duration(milliseconds: 400));
+      }
+      expect(overflows, isEmpty);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
   });
 }
+
+/// A one-category server menu of [items] (name, price, tags), for layout
+/// tests with long content.
+MenuCatalog _layoutCatalog(
+  List<({String name, String price, List<String> tags, String description})>
+  items,
+) {
+  return MenuCatalog.fromApiJson({
+    'schema_version': 2,
+    'menu_version': 1,
+    'catalog_revision': 1,
+    'effective_revision': 'layout-test',
+    'catalog': {
+      'categories': [
+        {
+          'id': 'cat-0',
+          'name_tr': 'Kahveler',
+          'icon_key': 'local_cafe_rounded',
+          'items': [
+            for (final item in items)
+              {
+                'id': item.name,
+                'category_id': 'cat-0',
+                'name_tr': item.name,
+                'description_tr': item.description,
+                'price_text': item.price,
+                'tags': item.tags,
+                'icon_key': 'local_cafe_rounded',
+              },
+          ],
+        },
+      ],
+    },
+    'wheel_item_ids': const <String>[],
+  });
+}
+
+Future<void> _setMenuCatalog(WidgetTester tester, MenuCatalog? catalog) async {
+  MenuService.instance.catalogNotifier.value = catalog;
+  await _pumpFrames(tester, const Duration(milliseconds: 200));
+}
+
+/// Collects layout overflow errors until the returned callback restores the
+/// previous error handler.
+(List<String>, void Function()) _collectOverflows() {
+  final overflows = <String>[];
+  final previous = FlutterError.onError;
+  FlutterError.onError = (details) {
+    final message = details.exceptionAsString();
+    if (message.toLowerCase().contains('overflow')) overflows.add(message);
+    previous?.call(details);
+  };
+  return (overflows, () => FlutterError.onError = previous);
+}
+
+Finder _inDialog(Finder finder, {bool last = false}) => find.descendant(
+  of: last ? find.byType(Dialog).last : find.byType(Dialog).first,
+  matching: finder,
+);
 
 Future<void> _openMenu(WidgetTester tester) async {
   await _wakeKiosk(tester, 'TÜM MENÜYÜ İNCELE');
