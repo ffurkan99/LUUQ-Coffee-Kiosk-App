@@ -8,6 +8,12 @@ List<String> debugKioskWheelItemNames() =>
         .toList(growable: false) ??
     const [];
 
+/// Test hook: whether the visible kiosk's pulse animation is running.
+@visibleForTesting
+bool debugKioskPulseAnimating() =>
+    _CafeKioskScreenState.activeInstance?._pulseController.isAnimating ??
+    false;
+
 /// Test hook: the barista drink/dessert the visible kiosk recommends.
 @visibleForTesting
 ({String? drink, String? dessert}) debugKioskBaristaNames() {
@@ -454,7 +460,9 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       upperBound: double.infinity,
       value: 0.0,
       duration: const Duration(milliseconds: 5000),
-    )..addListener(_handleSpinFrame);
+    )
+      ..addListener(_handleSpinFrame)
+      ..addStatusListener(_handleSpinStatus);
 
     _pulseController = AnimationController(
       vsync: this,
@@ -587,18 +595,34 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
 
   void _syncMotionPreference() {
     final controller = _videoController;
+    _updatePulse();
     if (MediaQuery.disableAnimationsOf(context) || !_isAppActive) {
-      _pulseController.stop();
-      _pulseController.value = 0.5;
       if (controller != null) {
         unawaited(_pauseVideoIfReady(controller));
       }
     } else {
-      if (!_pulseController.isAnimating) _pulseController.repeat(reverse: true);
       if (controller != null) {
         unawaited(_playVideoIfAllowed(controller));
       }
     }
+  }
+
+  /// Runs the pulse only while it can be seen changing: not with reduced
+  /// motion, not in the background and not during a spin (the pulsing parts
+  /// hold still while the wheel turns, so its frames would be wasted).
+  void _updatePulse() {
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    final run = !reduced && _isAppActive && !_spinController.isAnimating;
+    if (run) {
+      if (!_pulseController.isAnimating) _pulseController.repeat(reverse: true);
+    } else {
+      _pulseController.stop(canceled: false);
+      if (reduced) _pulseController.value = 0.5;
+    }
+  }
+
+  void _handleSpinStatus(AnimationStatus status) {
+    if (mounted && !status.isAnimating) _updatePulse();
   }
 
   Future<void> _initVideo() async {
@@ -802,7 +826,7 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
     }
 
     _idleTimer?.cancel();
-    _pulseController.stop(canceled: false);
+    _updatePulse();
     _pointerTicker.stop();
     final controller = _videoController;
     if (controller != null) {
@@ -1027,7 +1051,11 @@ class _CafeKioskScreenState extends State<CafeKioskScreen>
       _isIdle = false; // Never idle while spinning
     });
 
-    _spinController.animateTo(targetTurns, curve: curve).whenComplete(() {
+    final spin = _spinController.animateTo(targetTurns, curve: curve);
+    // A spin often starts without a status change (dragging already set the
+    // direction), so the pulse is paused here; the end is a status change.
+    _updatePulse();
+    spin.whenComplete(() {
       if (!mounted) return;
       setState(() {
         _selectedDrink = nextDrink;

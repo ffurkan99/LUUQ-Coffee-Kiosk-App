@@ -1073,6 +1073,26 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await _pumpFrames(tester, const Duration(milliseconds: 300));
     });
+
+    testWidgets('the pulse rests while the wheel spins', (tester) async {
+      _enableLicensedKiosk();
+      await _pumpKioskAtSize(tester, const Size(1920, 1080));
+      await _wakeKiosk(tester, 'ÇARKI ÇEVİR');
+      await _pumpFrames(tester, const Duration(milliseconds: 1500));
+      expect(debugKioskPulseAnimating(), isTrue);
+
+      await tester.tap(find.text('ÇARKI ÇEVİR'));
+      await _pumpFrames(tester, const Duration(milliseconds: 200));
+      expect(find.text('SEÇİLİYOR...'), findsOneWidget);
+      expect(debugKioskPulseAnimating(), isFalse);
+
+      await _pumpFrames(tester, const Duration(seconds: 6));
+      expect(find.text('BUGÜNKÜ SEÇİMİN'), findsOneWidget);
+      expect(debugKioskPulseAnimating(), isTrue);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpFrames(tester, const Duration(milliseconds: 300));
+    });
   });
 }
 
