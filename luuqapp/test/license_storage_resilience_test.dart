@@ -225,6 +225,40 @@ void main() {
     expect(find.byType(CafeKioskScreen), findsNothing);
   });
 
+  test('the Android store never wipes itself on a read error', () {
+    final options = LicenseStorage.androidOptionsForTesting.toMap();
+    expect(options['resetOnError'], 'false');
+    // Old-format data (APK 1.1.0+20 and older) is still migrated.
+    expect(options['migrateOnAlgorithmChange'], 'true');
+  });
+
+  testWidgets('"Tekrar Dene" continues once the store reads again, nothing wiped', (
+    tester,
+  ) async {
+    var failReads = true;
+    storage.onRead = (key) async {
+      if (failReads) {
+        throw PlatformException(code: 'Exception encountered', message: 'read');
+      }
+      return storage.values[key];
+    };
+
+    await tester.pumpWidget(const MaterialApp(home: LicenseGate()));
+    await tester.pumpAndSettle();
+    _expectStorageFailureScreen(tester);
+
+    // The store recovers (a transient Keystore error). Without a saved key
+    // the gate goes on to the activation screen, no network needed.
+    failReads = false;
+    storage.values.remove('license_key');
+    await tester.tap(find.text('Tekrar Dene'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lisans Verisine Erişilemiyor'), findsNothing);
+    expect(find.byType(LicenseActivationScreen), findsOneWidget);
+    expect(storage.deleteAllCalls, 0);
+  });
+
   testWidgets('secure storage is cleared only after explicit confirmation', (
     tester,
   ) async {

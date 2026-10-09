@@ -21,8 +21,18 @@ class LicenseStorageException implements Exception {
 }
 
 class LicenseStorage {
-  static const _defaultStorage = FlutterSecureStorage(aOptions: AndroidOptions());
+  // resetOnError false: the plugin's default wipes everything on a read error
+  // (e.g. a Keystore hiccup after boot), and the kiosk then re-enrolled as a
+  // new device. Now the error reaches the gate, which shows the storage
+  // failure screen with "Tekrar Dene" and an explicit, confirmed reset.
+  static const AndroidOptions _androidOptions = AndroidOptions(
+    resetOnError: false,
+  );
+  static const _defaultStorage = FlutterSecureStorage(aOptions: _androidOptions);
   static FlutterSecureStorage _storage = _defaultStorage;
+
+  @visibleForTesting
+  static AndroidOptions get androidOptionsForTesting => _androidOptions;
 
   static const String _keyLicenseMode = 'license_mode';
   static const String _keyLicenseKey = 'license_key';
