@@ -251,12 +251,23 @@ class LicenseStorage {
     }
   }
 
+  // Only for the staff-confirmed reset. When the stored key itself cannot be
+  // opened, the plugin fails every call while resetOnError is false, the
+  // reset included; with it on, it deletes the key and the data and starts
+  // a fresh store. Same namespace and ciphers as the normal options.
+  static final AndroidOptions _resetOptions = _androidOptions.copyWith(
+    resetOnError: true,
+  );
+
+  @visibleForTesting
+  static AndroidOptions get resetOptionsForTesting => _resetOptions;
+
   static Future<void> resetForReactivation() {
     ++_stateGeneration;
     return _runStorageOperation(
       kind: LicenseStorageFailureKind.delete,
       key: 'all_secure_storage',
-      operation: _storage.deleteAll,
+      operation: () => _storage.deleteAll(aOptions: _resetOptions),
     );
   }
 

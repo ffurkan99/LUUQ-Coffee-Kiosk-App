@@ -247,6 +247,14 @@ void main() {
     expect(options['migrateOnAlgorithmChange'], 'true');
   });
 
+  test('only the confirmed reset may wipe a store whose key cannot be opened', () {
+    final normal = LicenseStorage.androidOptionsForTesting.toMap();
+    final reset = LicenseStorage.resetOptionsForTesting.toMap();
+    expect(reset['resetOnError'], 'true');
+    // Same store: namespace, ciphers and migration are unchanged.
+    expect({...reset}..remove('resetOnError'), {...normal}..remove('resetOnError'));
+  });
+
   testWidgets('"Tekrar Dene" continues once the store reads again, nothing wiped', (
     tester,
   ) async {
@@ -302,6 +310,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(storage.deleteAllCalls, 1);
+    expect(storage.lastDeleteAllOptions?.toMap()['resetOnError'], 'true');
     expect(find.byType(CafeKioskScreen), findsNothing);
     expect(find.byType(LicenseActivationScreen), findsOneWidget);
   });
@@ -324,6 +333,7 @@ class _FakeSecureStorage extends FlutterSecureStorage {
   Future<void> Function(String key)? onDelete;
   Future<void> Function()? onDeleteAll;
   int deleteAllCalls = 0;
+  AndroidOptions? lastDeleteAllOptions;
 
   @override
   Future<String?> read({
@@ -384,6 +394,7 @@ class _FakeSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
+    lastDeleteAllOptions = aOptions;
     final handler = onDeleteAll;
     if (handler != null) return handler();
     deleteAllCalls++;
