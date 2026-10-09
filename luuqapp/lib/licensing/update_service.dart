@@ -483,6 +483,12 @@ class UpdateService {
     }
   }
 
+  /// Whether an offered update carries the checksum its APK is verified
+  /// against. Without one the APK can never be installed, so it is not even
+  /// downloaded (~120 MB).
+  static bool hasVerificationInfo(String? expectedHash) =>
+      expectedHash != null && expectedHash.trim().isNotEmpty;
+
   /// Verify the file SHA-256 hash in a streaming fashion to prevent OOM errors
   static Future<bool> verifySha256(File file, String expectedHash) async {
     if (expectedHash.trim().isEmpty) {

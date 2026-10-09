@@ -554,6 +554,25 @@ class _UpdateDialogState extends State<_UpdateDialog>
         );
       }
 
+      // Checked before downloading: without a checksum the APK could never
+      // be installed, so ~120 MB would be fetched for nothing.
+      final expectedHash = widget.licenseStatus.apkSha256 ?? '';
+      if (!UpdateService.hasVerificationInfo(expectedHash)) {
+        await LicenseStorage.clearDownloadedApkInfo();
+        if (!mounted) return;
+        setState(() {
+          _error = tr(
+            'Güncelleme doğrulama bilgisi eksik.',
+            'Update verification information is missing.',
+          );
+        });
+        _changeState(UpdateState.failed);
+        AnalyticsService.instance.trackEvent(
+          AnalyticsEvent(eventType: 'update_hash_failed', screen: 'home'),
+        );
+        return;
+      }
+
       final File file = await UpdateService.downloadApk(apkUrl, (progress) {
         // One rebuild per whole percent, not per downloaded chunk.
         if (!mounted) return;
@@ -571,26 +590,6 @@ class _UpdateDialogState extends State<_UpdateDialog>
 
       _changeState(UpdateState.downloaded);
       _changeState(UpdateState.verifying);
-
-      final expectedHash = widget.licenseStatus.apkSha256 ?? '';
-      if (expectedHash.trim().isEmpty) {
-        try {
-          await file.delete();
-        } catch (_) {}
-        await LicenseStorage.clearDownloadedApkInfo();
-        if (!mounted) return;
-        setState(() {
-          _error = tr(
-            'Güncelleme doğrulama bilgisi eksik.',
-            'Update verification information is missing.',
-          );
-        });
-        _changeState(UpdateState.failed);
-        AnalyticsService.instance.trackEvent(
-          AnalyticsEvent(eventType: 'update_hash_failed', screen: 'home'),
-        );
-        return;
-      }
 
       final bool isHashValid =
           await UpdateService.verifySha256AndDeleteOnFailure(
