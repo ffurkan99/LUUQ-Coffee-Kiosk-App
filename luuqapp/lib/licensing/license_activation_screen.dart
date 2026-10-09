@@ -437,6 +437,11 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen>
                         TextField(
                           controller: _keyController,
                           enabled: !_isLoading,
+                          // A shared kiosk keyboard must not learn the key
+                          // and offer it to the next person.
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          enableIMEPersonalizedLearning: false,
                           style: const TextStyle(
                             color: _cream,
                             fontWeight: FontWeight.bold,

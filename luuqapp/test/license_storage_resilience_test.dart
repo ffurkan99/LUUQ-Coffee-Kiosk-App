@@ -129,6 +129,21 @@ void main() {
     },
   );
 
+  testWidgets('the license key field keeps the keyboard from learning it', (
+    tester,
+  ) async {
+    storage.values.clear();
+    await tester.pumpWidget(
+      MaterialApp(home: LicenseActivationScreen(onActivated: () {})),
+    );
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.autocorrect, isFalse);
+    expect(field.enableSuggestions, isFalse);
+    expect(field.enableIMEPersonalizedLearning, isFalse);
+  });
+
   testWidgets('activation write failure closes its loader safely', (
     tester,
   ) async {
