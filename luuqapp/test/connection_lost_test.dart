@@ -1,7 +1,10 @@
+import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:luuqapp/licensing/feature_sync_service.dart';
 import 'package:luuqapp/licensing/license_status.dart';
+import 'package:luuqapp/licensing/license_storage.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -114,4 +117,56 @@ void main() {
     expect(service.recordCheckResult(offline), isFalse);
     expect(service.shouldSyncOnResume(), isTrue);
   });
+
+  test('one storage failure changes nothing', () {
+    expect(service.recordStorageFailure(), isFalse);
+    expect(service.connectionLost.value, isFalse);
+  });
+
+  test('a second storage failure in a row asks for the gate', () {
+    expect(service.recordStorageFailure(), isFalse);
+    expect(service.recordStorageFailure(), isTrue);
+    expect(service.connectionLost.value, isFalse);
+  });
+
+  test('a check that reached the store in between resets the count', () {
+    expect(service.recordStorageFailure(), isFalse);
+    service.recordCheckResult(active);
+    expect(service.recordStorageFailure(), isFalse);
+    // A network failure also read the store fine.
+    service.recordCheckResult(offline);
+    expect(service.recordStorageFailure(), isFalse);
+  });
+
+  test('a store that cannot be read never shows "no connection"', () async {
+    LicenseStorage.setStorageForTesting(_UnreadableStorage());
+    addTearDown(() => LicenseStorage.setStorageForTesting(null));
+
+    clock = clock.add(const Duration(seconds: 30));
+    await service.syncNow();
+    expect(service.connectionLost.value, isFalse);
+    expect(service.isRunning, isTrue);
+
+    clock = clock.add(const Duration(seconds: 30));
+    await service.syncNow();
+    expect(service.connectionLost.value, isFalse);
+    // Handed over to the gate (it reads the store again and shows the
+    // storage screen); the periodic check is stopped.
+    expect(service.isRunning, isFalse);
+  });
+}
+
+class _UnreadableStorage extends FlutterSecureStorage {
+  @override
+  Future<String?> read({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    throw PlatformException(code: 'Exception encountered', message: 'read');
+  }
 }

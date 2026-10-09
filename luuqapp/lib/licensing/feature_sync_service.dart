@@ -7,6 +7,7 @@ import '../main.dart'; // To access navigatorKey
 import 'license_gate.dart';
 import 'license_service.dart';
 import 'license_status.dart';
+import 'license_storage.dart';
 import 'update_service.dart';
 import '../menu/menu_service.dart';
 import '../analytics/analytics_service.dart';
@@ -52,6 +53,9 @@ class FeatureSyncService with WidgetsBindingObserver {
 
   DateTime? _lastSuccessfulCheck;
 
+  /// Checks in a row that failed because the secure store could not be read.
+  int _storageFailures = 0;
+
   /// When the license server last answered (shown in the admin app info).
   DateTime? get lastSuccessfulCheck => _lastSuccessfulCheck;
 
@@ -68,6 +72,7 @@ class FeatureSyncService with WidgetsBindingObserver {
     _owner = owner;
     // The gate has just validated online, so the grace period starts now.
     _lastSuccessfulCheck = now();
+    _storageFailures = 0;
     connectionLost.value = false;
     if (!_isObserverRegistered) {
       WidgetsBinding.instance.addObserver(this);
@@ -138,6 +143,14 @@ class FeatureSyncService with WidgetsBindingObserver {
         }
         await _redirectToGate();
       }
+    } on LicenseStorageException catch (e) {
+      // Not a network problem: the "no connection" cover would be wrong and
+      // would hide the storage screen (Tekrar Dene / confirmed reset).
+      debugPrint('FeatureSyncService: secure storage failed: $e');
+      if (recordStorageFailure()) {
+        stop();
+        await _redirectToGate();
+      }
     } catch (e) {
       debugPrint('FeatureSyncService: Error checking status: $e');
       recordCheckResult(
@@ -156,6 +169,7 @@ class FeatureSyncService with WidgetsBindingObserver {
   /// was a network/server failure, which never locks the license itself.
   @visibleForTesting
   bool recordCheckResult(LicenseStatus status) {
+    _storageFailures = 0;
     final unreachable =
         !status.active &&
         (status.reason == 'network_error' || status.reason == 'server_error');
@@ -170,6 +184,13 @@ class FeatureSyncService with WidgetsBindingObserver {
     }
     return false;
   }
+
+  /// Counts a check that failed reading the secure store. A single failure
+  /// changes nothing (a Keystore hiccup); the second in a row returns true:
+  /// the gate then reads the store again and shows the storage screen if it
+  /// still fails, or opens the kiosk if it recovered.
+  @visibleForTesting
+  bool recordStorageFailure() => ++_storageFailures >= 2;
 
   Future<bool> _ensureRuntimeKioskIsActive() async {
     try {
