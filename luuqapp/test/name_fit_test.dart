@@ -88,4 +88,26 @@ void main() {
     );
     expect(fitNameBeforeBadge(name: '', style: _style, maxWidth: 100), '');
   });
+
+  test('a repeated call reuses the measured result', () {
+    const name = 'Beyaz Çikolatalı Karamelli Buzlu Latte Önbellek';
+    final first = fitNameBeforeBadge(name: name, style: _style, maxWidth: 90);
+    final entries = fitNameCacheLengthForTesting;
+    final second = fitNameBeforeBadge(name: name, style: _style, maxWidth: 90);
+    expect(second, first);
+    expect(fitNameCacheLengthForTesting, entries);
+
+    // Any other input is measured on its own.
+    final wider = fitNameBeforeBadge(name: name, style: _style, maxWidth: 200);
+    expect(fitNameCacheLengthForTesting, entries + 1);
+    expect(wider.length, greaterThan(first.length));
+    final withBadge = fitNameBeforeBadge(
+      name: name,
+      style: _style,
+      maxWidth: 90,
+      badgeWidth: 40,
+    );
+    expect(fitNameCacheLengthForTesting, entries + 2);
+    expect(withBadge.length, lessThanOrEqualTo(first.length));
+  });
 }

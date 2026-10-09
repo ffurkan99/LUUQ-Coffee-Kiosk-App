@@ -130,34 +130,54 @@ class _LotteryMachineContentPainter extends CustomPainter {
     required this.simulation,
     required this.playerColors,
     required Listenable repaint,
-  }) : _numberPainters = List<TextPainter>.generate(
-         playerColors.length,
-         (index) => TextPainter(
-           text: TextSpan(
-             text: '${index + 1}',
-             style: const TextStyle(
-               color: Colors.white,
-               fontFamily: 'Roboto',
-               fontSize: 18,
-               fontWeight: FontWeight.w900,
-               shadows: [
-                 Shadow(
-                   color: Color(0xCC000000),
-                   blurRadius: 3,
-                   offset: Offset(0, 1),
-                 ),
-               ],
-             ),
-           ),
-           textDirection: TextDirection.ltr,
-           textAlign: TextAlign.center,
-         )..layout(),
-       ),
-       super(repaint: repaint);
+  }) : super(repaint: repaint);
 
   final WhoPaysLotterySimulation simulation;
   final List<Color> playerColors;
-  final List<TextPainter> _numberPainters;
+
+  // The ball numbers ("1".."6") are laid out once and shared by every
+  // painter: the widget builds a new painter on each rebuild, and painters
+  // have no dispose, so per-painter TextPainters were never released.
+  static final List<TextPainter> _sharedNumbers = <TextPainter>[];
+  static bool _listensToFonts = false;
+
+  static TextPainter _numberPainter(int index) {
+    if (!_listensToFonts) {
+      _listensToFonts = true;
+      // A font change re-lays them out on the next paint.
+      PaintingBinding.instance.systemFonts.addListener(() {
+        for (final painter in _sharedNumbers) {
+          painter.dispose();
+        }
+        _sharedNumbers.clear();
+      });
+    }
+    while (_sharedNumbers.length <= index) {
+      _sharedNumbers.add(
+        TextPainter(
+          text: TextSpan(
+            text: '${_sharedNumbers.length + 1}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'Roboto',
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              shadows: [
+                Shadow(
+                  color: Color(0xCC000000),
+                  blurRadius: 3,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+          textAlign: TextAlign.center,
+        )..layout(),
+      );
+    }
+    return _sharedNumbers[index];
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -246,7 +266,7 @@ class _LotteryMachineContentPainter extends CustomPainter {
   }
 
   void _paintBall(Canvas canvas, Offset center, int index) {
-    if (index >= playerColors.length || index >= _numberPainters.length) return;
+    if (index >= playerColors.length) return;
 
     const radius = WhoPaysLotterySimulation.ballRadius;
     final position = center + simulation.renderPositions[index];
@@ -282,7 +302,7 @@ class _LotteryMachineContentPainter extends CustomPainter {
         ..style = PaintingStyle.stroke,
     );
 
-    final numberPainter = _numberPainters[index];
+    final numberPainter = _numberPainter(index);
     numberPainter.paint(
       canvas,
       position - Offset(numberPainter.width / 2, numberPainter.height / 2),
