@@ -223,7 +223,9 @@ class MenuCache {
         !_hasImageSignature(bytes, mime)) {
       return null;
     }
-    final digest = sha256.convert(bytes).toString();
+    // Hashing runs off the UI isolate (as in isValidImage): a menu update
+    // with many photos must not stall the wheel, snow or video.
+    final digest = await _bytesSha256(bytes);
     if (normalizedExpectedHash != null &&
         normalizedExpectedHash.isNotEmpty &&
         digest != normalizedExpectedHash) {
@@ -240,8 +242,8 @@ class MenuCache {
     );
     await file.parent.create(recursive: true);
     if (await file.exists()) {
-      final existingHash = await sha256.bind(file.openRead()).first;
-      if (existingHash.toString() == digest) return file.path;
+      final existingHash = await _pathSha256(file.path);
+      if (existingHash == digest) return file.path;
       await file.delete();
     }
     final temp = File(
@@ -249,8 +251,8 @@ class MenuCache {
     );
     try {
       await temp.writeAsBytes(bytes, flush: true);
-      final writtenHash = await sha256.bind(temp.openRead()).first;
-      if (writtenHash.toString() != digest) return null;
+      final writtenHash = await _pathSha256(temp.path);
+      if (writtenHash != digest) return null;
       await temp.rename(file.path);
     } finally {
       if (await temp.exists()) await temp.delete();
@@ -355,12 +357,26 @@ class MenuCache {
       return known.sha;
     }
     final path = file.path;
-    final digest = await Isolate.run(
-      () async => (await sha256.bind(File(path).openRead()).first).toString(),
-    );
+    final digest = await _pathSha256(path);
     _verified[path] = (size: length, mtimeMs: mtimeMs, sha: digest);
     return digest;
   }
+
+  /// SHA-256 of a file, read and hashed in a background isolate.
+  static Future<String> _pathSha256(String path) => Isolate.run(
+    () async => (await sha256.bind(File(path).openRead()).first).toString(),
+  );
+
+  /// SHA-256 of downloaded bytes, hashed in a background isolate.
+  static Future<String> _bytesSha256(List<int> bytes) =>
+      Isolate.run(() => sha256.convert(bytes).toString());
+
+  @visibleForTesting
+  static Future<String> bytesSha256ForTesting(List<int> bytes) =>
+      _bytesSha256(bytes);
+
+  @visibleForTesting
+  static Future<String> pathSha256ForTesting(String path) => _pathSha256(path);
 
   /// Deletes cached images the active catalog no longer references, so every
   /// image change does not leave the old file behind forever.
