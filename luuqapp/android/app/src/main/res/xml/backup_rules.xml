@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and older (backup is also off: allowBackup="false"): nothing of
+  this app is backed up. The secure store's ciphertext must never be restored
+  without the device-bound Android Keystore key; see data_extraction_rules.xml.
+-->
 <full-backup-content>
-    <!--
-      flutter_secure_storage 9.2.4 stores Android values in this credential-
-      protected SharedPreferences file. Its ciphertext must never be restored
-      without the device-bound Android Keystore key.
-    -->
-    <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
+    <exclude domain="device_root" path="." />
+    <exclude domain="device_file" path="." />
+    <exclude domain="device_database" path="." />
+    <exclude domain="device_sharedpref" path="." />
 </full-backup-content>

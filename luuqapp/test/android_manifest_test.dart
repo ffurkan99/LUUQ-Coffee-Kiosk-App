@@ -24,4 +24,39 @@ void main() {
     );
     expect(manifest, matches(impellerMetaData));
   });
+
+  test('no app data goes to a cloud backup or a new device', () {
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    expect(manifest, contains('android:allowBackup="false"'));
+    expect(manifest, contains('android:dataExtractionRules="@xml/data_extraction_rules"'));
+    expect(manifest, contains('android:fullBackupContent="@xml/backup_rules"'));
+
+    const domains = [
+      'root', 'file', 'database', 'sharedpref', 'external',
+      'device_root', 'device_file', 'device_database', 'device_sharedpref',
+    ];
+    final rules = File(
+      'android/app/src/main/res/xml/data_extraction_rules.xml',
+    ).readAsStringSync();
+    for (final section in ['cloud-backup', 'device-transfer']) {
+      final body = RegExp('<$section>(.*?)</$section>', dotAll: true)
+          .firstMatch(rules)
+          ?.group(1);
+      expect(body, isNotNull, reason: section);
+      for (final domain in domains) {
+        expect(body, contains('<exclude domain="$domain" path="." />'),
+            reason: '$section $domain');
+      }
+      expect(body, isNot(contains('<include')), reason: section);
+    }
+    final legacy = File(
+      'android/app/src/main/res/xml/backup_rules.xml',
+    ).readAsStringSync();
+    for (final domain in domains) {
+      expect(legacy, contains('<exclude domain="$domain" path="." />'),
+          reason: 'backup_rules $domain');
+    }
+  });
 }
